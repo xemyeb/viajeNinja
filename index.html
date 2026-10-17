@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Viaje Ninja</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game" width="960" height="544"></canvas>
+
+  <!-- Controles táctiles (solo se muestran en pantallas táctiles) -->
+  <div id="touch" class="hidden">
+    <div class="pad left">
+      <button data-a="left" aria-label="Izquierda">◀</button>
+      <button data-a="right" aria-label="Derecha">▶</button>
+      <button data-a="down" aria-label="Abajo" class="small">▼</button>
+    </div>
+    <div class="pad top">
+      <button data-a="nextWeapon" class="small" aria-label="Cambiar arma">⚔</button>
+      <button data-a="armor" class="small" aria-label="Cambiar armadura">🛡</button>
+      <button data-a="diamond" class="small" aria-label="Lanzar diamante">💎</button>
+      <button data-a="pause" class="small" aria-label="Pausa">⏸</button>
+    </div>
+    <div class="pad right">
+      <button data-a="attack" aria-label="Atacar">⚡</button>
+      <button data-a="jump" aria-label="Saltar">⤒</button>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/enemies.js"></script>
+  <script src="js/bosses.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/art-extra.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
