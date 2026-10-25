@@ -64,3 +64,5 @@ Aumenta un poco el nivel de dificultad de los siguientes monstruos:
 - El caballero oscuro
 - Ice kill
 - Heavy Metal
+
+Para aumentar un poco mas el nivel de dificultad, en los monstruos final al saltar encima de ellos, solo le quita vida el primer salto, luego puedes saltar, pero no le quita

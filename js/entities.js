@@ -36,6 +36,7 @@ class Player {
     this.flip = 0;
     this.regen = 0;
     this.flyE = FLY.energy;
+    this.bossStomped = false; // ya ha pisado al jefe en este salto (no vuelve a dañar hasta tocar el suelo)
     this.flying = false;
     this.dead = false;
     this.hearts = START_HEARTS;

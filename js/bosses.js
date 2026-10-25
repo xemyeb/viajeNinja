@@ -3,11 +3,11 @@
 //  Monstruos finales
 // ============================================================
 const BOSS_TYPES = {
-  heavyMetal:      { name: 'Heavy Metal',          w: 92,  h: 100, hp: 14, helper: 'miniMetal' },
+  heavyMetal:      { name: 'Heavy Metal',          w: 92,  h: 100, hp: 17, helper: 'miniMetal' },
   dobleDragon:     { name: 'Doble Dragón',         w: 150, h: 104, hp: 16, helper: 'dragoncito' },
-  caballeroOscuro: { name: 'El Caballero Oscuro',  w: 56,  h: 96,  hp: 20, helper: 'caballerito' },
+  caballeroOscuro: { name: 'El Caballero Oscuro',  w: 56,  h: 96,  hp: 23, helper: 'caballerito' },
   witchSand:       { name: 'Witch Sand',           w: 60,  h: 92,  hp: 15, helper: 'escorpion' },
-  iceKill:         { name: 'Ice Kill',             w: 104, h: 112, hp: 22, helper: 'osoPolar', weak: 'fire' },
+  iceKill:         { name: 'Ice Kill',             w: 104, h: 112, hp: 26, helper: 'osoPolar', weak: 'fire' },
   llamarada:       { name: 'Llamarada Explosiva',  w: 96,  h: 104, hp: 24, helper: 'monstruitoFuego', weak: 'ice' },
 };
 
@@ -126,7 +126,7 @@ class Boss {
         break;
       case 'walk':
         this.facing = dx >= 0 ? 1 : -1;
-        this.vx = this.facing * 1.3;
+        this.vx = this.facing * 1.5;
         if (--this.timer <= 0) {
           const seq = ['jump', 'throw', 'magnet', 'jump', 'throw'];
           const s = seq[this.seq++ % seq.length];
@@ -145,36 +145,36 @@ class Boss {
           g.shake = 14;
           Sound.play('thud');
           for (const s of [-1, 1]) {
-            g.projectiles.push(new Projectile('wave', this.cx + s * this.w / 2, this.groundY - 11, s * 4.2, 0, 'enemy', 1, { life: 140 }));
+            g.projectiles.push(new Projectile('wave', this.cx + s * this.w / 2, this.groundY - 11, s * 4.8, 0, 'enemy', 1, { life: 140 }));
           }
-          this.setState('rest', 50);
+          this.setState('rest', 38);
         }
         break;
       case 'throw':
         this.vx = 0;
         this.facing = dx >= 0 ? 1 : -1;
-        if (this.timer % 24 === 0) {
+        if (this.timer % 18 === 0) {
           g.projectiles.push(new Projectile('scrap', this.cx + this.facing * 30, this.y + 30, clamp(dx / 48, -6.5, 6.5), -9, 'enemy', 1, { gravity: 0.38 }));
           Sound.play('throw');
         }
-        if (--this.timer <= 0) this.setState('walk', 90);
+        if (--this.timer <= 0) this.setState('walk', 70);
         break;
       case 'magnet': {
         this.vx = 0;
         this.facing = dx >= 0 ? 1 : -1;
         // ¡Si llevas armadura de metal te atrae más fuerte!
         const metal = p.inv.armor === 'metal';
-        p.push = (dx > 0 ? -1 : 1) * (metal ? 1.7 : 0.9);
-        if (this.timer % 40 === 0) {
+        p.push = (dx > 0 ? -1 : 1) * (metal ? 1.9 : 1.15);
+        if (this.timer % 32 === 0) {
           const sx = this.arena.x0 + 60 + Math.random() * (this.arena.x1 - this.arena.x0 - 120);
           g.projectiles.push(new Projectile('scrapIn', sx, 30, 0, 0, 'enemy', 1, { target: this, life: 420 }));
         }
-        if (--this.timer <= 0) this.setState('walk', 90);
+        if (--this.timer <= 0) this.setState('walk', 70);
         break;
       }
       case 'rest':
         this.vx = 0;
-        if (--this.timer <= 0) this.setState('walk', 80);
+        if (--this.timer <= 0) this.setState('walk', 65);
         break;
     }
     this.physics(g);
@@ -258,12 +258,12 @@ class Boss {
         break;
       case 'walk':
         this.facing = dx >= 0 ? 1 : -1;
-        this.vx = this.facing * 1.5;
-        if (Math.abs(dx) < 110 && this.onGround) { this.vx = 0; this.setState('slashWarn', 32); }
+        this.vx = this.facing * 1.75;
+        if (Math.abs(dx) < 110 && this.onGround) { this.vx = 0; this.setState('slashWarn', 24); }
         else if (--this.timer <= 0) {
           const seq = ['chargeWarn', 'leap', 'waveWarn', 'leap', 'chargeWarn', 'waveWarn'];
           const s = seq[this.seq++ % seq.length];
-          this.setState(s, s === 'leap' ? 0 : 30);
+          this.setState(s, s === 'leap' ? 0 : 24);
         }
         break;
       case 'slashWarn':
@@ -271,7 +271,7 @@ class Boss {
         if (--this.timer <= 0) { this.setState('slash', 14); Sound.play('swing'); }
         break;
       case 'slash':
-        if (--this.timer <= 0) this.setState('rest', 40);
+        if (--this.timer <= 0) this.setState('rest', 30);
         break;
       case 'chargeWarn':
         this.vx = 0;
@@ -279,12 +279,12 @@ class Boss {
         if (--this.timer <= 0) this.setState('charge', 70);
         break;
       case 'charge':
-        this.vx = this.facing * 6.2;
+        this.vx = this.facing * 7;
         if (this.hitWall || --this.timer <= 0) {
           const wall = this.hitWall;
           this.vx = 0;
           if (wall) { g.shake = 10; Sound.play('thud'); }
-          this.setState(wall ? 'dizzy' : 'rest', wall ? 100 : 40);
+          this.setState(wall ? 'dizzy' : 'rest', wall ? 85 : 30);
         }
         break;
       case 'leap':
@@ -294,20 +294,20 @@ class Boss {
         break;
       case 'air':
         this.timer++;
-        if (this.onGround && this.timer > 5) { this.vx = 0; g.shake = 10; Sound.play('thud'); this.setState('rest', 40); }
+        if (this.onGround && this.timer > 5) { this.vx = 0; g.shake = 10; Sound.play('thud'); this.setState('rest', 30); }
         break;
       case 'waveWarn':
         this.vx = 0;
         this.facing = dx >= 0 ? 1 : -1;
         if (--this.timer <= 0) {
-          g.projectiles.push(new Projectile('swordwave', this.cx + this.facing * 40, this.groundY - 20, this.facing * 4.6, 0, 'enemy', 1, { life: 220 }));
+          g.projectiles.push(new Projectile('swordwave', this.cx + this.facing * 40, this.groundY - 20, this.facing * 5.4, 0, 'enemy', 1, { life: 220 }));
           Sound.play('swing');
-          this.setState('rest', 40);
+          this.setState('rest', 30);
         }
         break;
       case 'rest': case 'dizzy':
         this.vx = 0;
-        if (--this.timer <= 0) this.setState('walk', 100);
+        if (--this.timer <= 0) this.setState('walk', 80);
         break;
     }
     this.physics(g);
@@ -391,7 +391,7 @@ class Boss {
         break;
       case 'walk':
         this.facing = dx >= 0 ? 1 : -1;
-        this.vx = this.facing * 1.1;
+        this.vx = this.facing * 1.35;
         if (--this.timer <= 0) {
           const seq = ['throw', 'roll', 'stomp', 'throw', 'roll'];
           const s = seq[this.seq++ % seq.length];
@@ -401,21 +401,21 @@ class Boss {
       case 'throw':
         this.vx = 0;
         this.facing = dx >= 0 ? 1 : -1;
-        if (this.timer % 26 === 0) {
+        if (this.timer % 20 === 0) {
           g.projectiles.push(new Projectile('iceball', this.cx + this.facing * 40, this.y + 24, clamp(dx / 50, -6, 6), -8.5, 'enemy', 1, { gravity: 0.32 }));
           this.mouth = 14;
           Sound.play('ice');
         }
-        if (--this.timer <= 0) this.setState('walk', 80);
+        if (--this.timer <= 0) this.setState('walk', 65);
         break;
       case 'roll':
         this.vx = 0;
         this.facing = dx >= 0 ? 1 : -1;
         if (this.timer === 20) {
-          g.projectiles.push(new Projectile('snowball', this.cx + this.facing * (this.w / 2 + 16), this.groundY - 16, this.facing * 3.2, 0, 'enemy', 1, { life: 420 }));
+          g.projectiles.push(new Projectile('snowball', this.cx + this.facing * (this.w / 2 + 16), this.groundY - 16, this.facing * 3.9, 0, 'enemy', 1, { life: 420 }));
           Sound.play('throw');
         }
-        if (--this.timer <= 0) this.setState('rest', 40);
+        if (--this.timer <= 0) this.setState('rest', 30);
         break;
       case 'stomp':
         this.vx = 0;
@@ -428,16 +428,16 @@ class Boss {
           g.shake = 14; Sound.play('thud');
           // carámbanos que avisan temblando antes de caer
           const ax = this.arena.x0, aw = this.arena.x1 - this.arena.x0;
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 6; i++) {
             const x = ax + 60 + Math.random() * (aw - 120);
-            g.projectiles.push(new Projectile('icicle', x, 20, 0, 0, 'enemy', 1, { gravity: 0.35, delay: 50 + i * 15, life: 300 }));
+            g.projectiles.push(new Projectile('icicle', x, 20, 0, 0, 'enemy', 1, { gravity: 0.35, delay: 45 + i * 12, life: 300 }));
           }
-          this.setState('rest', 60);
+          this.setState('rest', 45);
         }
         break;
       case 'rest':
         this.vx = 0;
-        if (--this.timer <= 0) this.setState('walk', 90);
+        if (--this.timer <= 0) this.setState('walk', 70);
         break;
     }
     this.physics(g);

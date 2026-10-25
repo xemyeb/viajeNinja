@@ -50,7 +50,7 @@ Posiciones en `ENDING`.
 `g.selectWeapon`, `g.cycleWeapon`, `g.cycleArmor`, `g.throwDiamond`, `g.bombExplode`, `g.weaponHit`.
 
 ### Reglas de juego clave
-- Pisar a un enemigo normal lo mata de un golpe; pisar al jefe quita 2. `stomp` = cae (`vy>0.5`) y `prevBottom` estaba sobre la parte alta.
+- Pisar a un enemigo normal lo mata de un golpe; pisar al jefe quita 2, pero solo el primer pisotón: los rebotes encadenados no dañan hasta volver a tocar el suelo (`player.bossStomped`). `stomp` = cae (`vy>0.5`) y `prevBottom` estaba sobre la parte alta.
 - Mosquito (`lethal`) mata al instante si no se le pisa, salvo con poción (`inv.pocion`, objeto `pocion`, una por mundo antes del primer mosquito): salva de una picadura y se gasta.
 - Daño: primero gasta escudo de armadura (`shield`, se regenera), luego corazones. `immune: 'fire'|'ice'` anula ese elemento.
 - Caer a agujero/agua/lava: −1 corazón y vuelve a `lastSafe`. Morir: −1 vida y vuelve al último checkpoint (los checkpoints rellenan corazones).

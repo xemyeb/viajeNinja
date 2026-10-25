@@ -184,6 +184,7 @@ class Game {
 
     p.update(this);
     this.platformCollide(p);
+    if (p.onGround) p.bossStomped = false;
     this.tileHazards(p);
     if (this.state !== 'playing') return;
 
@@ -289,10 +290,16 @@ class Game {
         if (overlap(phb, hb)) {
           const stomp = p.vy > 0.5 && p.prevBottom <= hb.y + 18;
           if (stomp) {
-            b.hurt(this, 2);
+            // solo el primer pisotón hace daño: hay que volver a tocar el suelo
+            if (!p.bossStomped) {
+              if (b.hurt(this, 2)) p.bossStomped = true;
+              Sound.play('stomp');
+            } else {
+              Sound.play('clank');
+              if (!p.stompHint) { p.stompHint = true; this.floatText(p.x + p.w / 2, p.y - 12, '¡Toca el suelo y vuelve a saltar!', '#ffffff'); }
+            }
             this.bounce(p);
             p.vy = -11;
-            Sound.play('stomp');
           } else if (!b.harmless()) this.bossHurtPlayer(1, b.kind === 'llamarada' ? 'fire' : null, b.cx);
         }
         const ab = b.attackBox();
