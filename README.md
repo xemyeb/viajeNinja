@@ -37,13 +37,14 @@ Cada mundo tiene además un escondite secreto con una **vida extra**.
 
 Animales ayudantes de los villanos: tigres, lobos, pitones, araña gigante, mosquitos (¡su picadura elimina!), hipopótamos, leones, rinocerontes, murciélagos y guepardos.
 
-- **Espada de fuego**: hace doble daño a los monstruos de hielo.
-- **Espada de hielo**: congela a los enemigos y hace doble daño a los monstruos de fuego.
+- **Espada de fuego**: lanza llamaradas y hace doble daño a los monstruos de hielo.
+- **Espada de hielo**: lanza rayos de hielo que congelan a los enemigos y hace doble daño a los monstruos de fuego.
 - **Escudo**: protege de las bombas y permite andar sobre la lava.
+- **Poción antimosquitos** (una en cada mundo): te salva de una picadura de mosquito y luego se gasta.
 - **Armaduras y cascos**: aguantan golpes. La de fuego hace inmune al fuego y la de hielo, al hielo.
 
 Al vencer al jefe, este suelta un **diamante**: cógelo y lánzalo para abrir el portal al siguiente mundo.
-Al final, el ninja rescata a su familia de la mazmorra.
+Al final, el ninja rescata a su familia de la mazmorra: ¡tú lo manejas y tienes que romper el candado de la jaula (3 golpes, o dispararle)!
 El progreso se guarda al completar cada mundo.
 
 ## Código

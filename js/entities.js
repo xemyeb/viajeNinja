@@ -140,6 +140,13 @@ class Player {
       Sound.play('throw');
     } else {
       Sound.play('swing');
+      if (W.shot) {
+        // espadas elementales: llamarada o rayo de hielo
+        const S = W.shot;
+        g.projectiles.push(new Projectile(S.kind, this.x + this.w / 2 + this.facing * 30, this.y + 18, this.facing * S.speed, 0, 'player', S.dmg,
+          { element: W.element, freeze: W.freeze, life: S.life }));
+        Sound.play(W.element === 'fire' ? 'fire' : 'ice');
+      }
     }
   }
 
@@ -196,6 +203,7 @@ const PROJ_SIZE = {
   star: [16, 16], arrow: [26, 8], fire: [20, 20], ice: [18, 18], scrap: [18, 18], scrapIn: [18, 18],
   wave: [26, 22], swordwave: [22, 40], diamond: [22, 22], friendFire: [18, 18],
   tornado: [30, 56], snowball: [28, 28], bomb: [22, 22], icicle: [16, 30], iceball: [18, 18],
+  flame: [30, 24], iceRay: [40, 12],
 };
 // Proyectiles enemigos que no se pueden romper (hay que saltarlos)
 const UNBREAKABLE = new Set(['wave', 'swordwave', 'tornado']);
@@ -211,6 +219,7 @@ class Projectile {
     this.dmg = dmg;
     this.gravity = opts.gravity || 0;
     this.element = opts.element || ({ fire: 'fire', ice: 'ice', iceball: 'ice', snowball: 'ice', icicle: 'ice', bomb: 'bomb' })[kind] || null;
+    this.freeze = opts.freeze || 0; // rayo de hielo: frames que congela
     this.fuse = opts.fuse || 70;   // bombas
     this.delay = opts.delay || 0;  // carámbanos: tiempo de aviso antes de caer
     this.life = opts.life || 240;
@@ -241,6 +250,15 @@ class Projectile {
     this.y += this.vy;
     const cx = this.x + this.w / 2, cy = this.y + this.h / 2;
 
+    // estela de la llamarada y del rayo de hielo
+    if (this.kind === 'flame' && this.t % 2 === 0) {
+      g.particles.push(new Particle(cx - this.vx * 2, cy + (Math.random() - 0.5) * 14, -this.vx * 0.15, -0.5 - Math.random(),
+        Math.random() < 0.5 ? '#ffb02e' : '#ff5a1f', 20, 5, -0.04));
+    } else if (this.kind === 'iceRay' && this.t % 2 === 0) {
+      g.particles.push(new Particle(cx - this.vx, cy + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 0.6,
+        Math.random() < 0.5 ? '#bdefff' : '#ffffff', 18, 3, 0));
+    }
+
     if (this.kind === 'icicle') {
       if (isSolid(tileAt(g.level, Math.floor(cx / TILE), Math.floor((this.y + this.h) / TILE)))) {
         this.dead = true;
@@ -270,7 +288,7 @@ class Projectile {
     } else if (this.kind !== 'scrapIn') {
       if (isSolid(tileAt(g.level, Math.floor(cx / TILE), Math.floor(cy / TILE)))) {
         this.dead = true;
-        g.sparks(cx, cy, this.kind === 'fire' ? '#ffb02e' : this.kind === 'ice' ? '#bdefff' : '#ffffff', 5);
+        g.sparks(cx, cy, this.element === 'fire' ? '#ffb02e' : this.element === 'ice' ? '#bdefff' : '#ffffff', 5);
       }
     }
     if (this.y > VIEW_H + 40 || this.x < g.camX - 300 || this.x > g.camX + VIEW_W + 300) this.dead = true;

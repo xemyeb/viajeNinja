@@ -869,6 +869,7 @@ const Art = {
       return;
     }
     if (it.kind === 'life') { this.lifeItem(ctx, cx, cy, it.t); return; }
+    if (it.kind === 'pocion') { this.circle(ctx, cx, cy, 20 + Math.sin(it.t * 0.1) * 2, 'rgba(61,220,132,0.22)'); this.potion(ctx, cx, cy, 15); return; }
     if (it.kind === 'escudo') { this.circle(ctx, cx, cy, 20, 'rgba(255,220,120,0.2)'); this.shieldItem(ctx, cx, cy, 14); return; }
     if (it.kind === 'heart') { this.heart(ctx, cx, cy, 11, '#ff4d6d'); this.circle(ctx, cx - 4, cy - 3, 2, '#ffc2cd'); return; }
     if (it.kind === 'diamond') { this.diamond(ctx, cx, cy, 13, it.t); return; }

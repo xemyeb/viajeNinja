@@ -327,6 +327,24 @@ Object.assign(Art, {
     }
   },
 
+  // Poción antimosquitos: frasco verde con un mosquito tachado
+  potion(ctx, cx, cy, r) {
+    const k = r / 14;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
+    this.box(ctx, -4, -17, 8, 7, 2, '#8a5a2b');            // tapón
+    this.box(ctx, -3, -11, 6, 5, 1, '#cfe9d6');            // cuello
+    this.circle(ctx, 0, 3, 12, '#cfe9d6');                 // cristal
+    this.circle(ctx, 0, 4, 10, '#3ddc84');                 // líquido
+    this.circle(ctx, -4, 0, 3, 'rgba(255,255,255,0.7)');   // brillo
+    // mosquito tachado
+    this.ellipse(ctx, 1, 5, 3, 2, '#2b2b2b');
+    ctx.strokeStyle = '#2b2b2b'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-1, 4); ctx.lineTo(-4, 1); ctx.moveTo(3, 4); ctx.lineTo(6, 1); ctx.stroke();
+    ctx.strokeStyle = '#e63946'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.arc(1, 5, 6.5, 0, Math.PI * 2); ctx.moveTo(-3.5, 0.5); ctx.lineTo(5.5, 9.5); ctx.stroke();
+    ctx.restore();
+  },
+
   lifeItem(ctx, cx, cy, t) {
     this.circle(ctx, cx, cy, 19 + Math.sin(t * 0.1) * 2, 'rgba(125,255,154,0.25)');
     this.ninjaHead(ctx, cx, cy, 12);
@@ -532,6 +550,35 @@ Object.assign(Art, {
   // ============================================================
   projectileX(ctx, p, cx, cy) {
     switch (p.kind) {
+      case 'flame': {
+        // llamarada de la espada de fuego: crece y se aviva al avanzar
+        const d = Math.sign(p.vx || 1), k = 0.75 + Math.min(1, p.t / 20) * 0.45;
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(d * k, k);
+        const fl = Math.sin(p.t * 0.6) * 2;
+        ctx.fillStyle = 'rgba(255,90,31,0.85)';
+        ctx.beginPath(); ctx.moveTo(18, 0); ctx.quadraticCurveTo(4, -16 - fl, -18, -6); ctx.quadraticCurveTo(-8, 0, -18, 6); ctx.quadraticCurveTo(4, 16 + fl, 18, 0); ctx.fill();
+        ctx.fillStyle = '#ffb02e';
+        ctx.beginPath(); ctx.moveTo(15, 0); ctx.quadraticCurveTo(4, -10, -10, -3); ctx.quadraticCurveTo(-4, 0, -10, 3); ctx.quadraticCurveTo(4, 10, 15, 0); ctx.fill();
+        this.ellipse(ctx, 6, 0, 6, 4, '#fff3b0');
+        ctx.restore();
+        break;
+      }
+      case 'iceRay': {
+        // rayo de hielo: haz brillante con punta de cristal
+        const d = Math.sign(p.vx || 1);
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(d, 1);
+        ctx.fillStyle = 'rgba(126,214,245,0.45)'; ctx.fillRect(-26, -6, 40, 12);
+        ctx.fillStyle = '#bdefff'; ctx.fillRect(-22, -3, 36, 6);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(-18, -1, 30, 2);
+        ctx.fillStyle = '#e6f8ff';
+        ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(12, -8); ctx.lineTo(8, 0); ctx.lineTo(12, 8); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          const sx = -20 + ((p.t * 3 + i * 13) % 36);
+          this.circle(ctx, sx, Math.sin(p.t * 0.5 + i) * 5, 1.6, '#ffffff');
+        }
+        ctx.restore();
+        break;
+      }
       case 'tornado': {
         for (let i = 0; i < 6; i++) {
           const yy = p.y + p.h - 4 - i * 9, rx = 6 + i * 2.6;

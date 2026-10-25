@@ -39,3 +39,16 @@ Vamos a añadir los siguientes objetos:
 - Una espada de hielo
 
 Cuando acabe el último monstruo, el final se debe mostrar como el ninja rescata a su familia que estaba capturada en una mazmorra. El papá tiene barba y la mamá gafas y pelo pelirrojo
+
+Vamos a realizar unas modificaciones:
+
+Armas
+- La espada de hielo va a lanzar rayos de hielo y congelerá a los rivales cuando les alcance
+- La espada de fuego va a lanzar llamaradas.
+
+Objetos
+- Que exista un powerup, que sea una poción antimosquitos y te salva de solamente una picadura de mosquito, luego ya no tiene efecto. Debe aparecer una por nivel
+
+Escena final
+- La escena final del ninja salvando a los padres, que no sea todo animación, sino que se pueda manejar al ninja y se tenga que abrir la celda por la acción del jugador. 
+

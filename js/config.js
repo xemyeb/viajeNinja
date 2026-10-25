@@ -41,10 +41,13 @@ const WEAPONS = {
   lunchacos: { name: 'Lunchacos',       type: 'melee', dmg: 1, range: 48, cooldown: 13, duration: 14, both: true },
   estrellas: { name: 'Estrellas ninja', type: 'proj',  dmg: 1, speed: 9,  cooldown: 14, proj: 'star' },
   arco:      { name: 'Arco',            type: 'proj',  dmg: 2, speed: 11, cooldown: 26, proj: 'arrow' },
-  // Espadas elementales: hacen doble daño a los enemigos débiles a su elemento.
-  // La de hielo además congela a los enemigos normales un rato.
-  espadaFuego: { name: 'Espada de fuego', type: 'melee', dmg: 2, range: 56, cooldown: 16, duration: 11, element: 'fire' },
-  espadaHielo: { name: 'Espada de hielo', type: 'melee', dmg: 2, range: 56, cooldown: 16, duration: 11, element: 'ice', freeze: 150 },
+  // Espadas elementales: golpean de cerca y además lanzan su poder (shot):
+  // la de fuego una llamarada, la de hielo un rayo que congela al enemigo.
+  // Doble daño a los enemigos débiles a su elemento.
+  espadaFuego: { name: 'Espada de fuego', type: 'melee', dmg: 2, range: 56, cooldown: 18, duration: 11, element: 'fire',
+                 shot: { kind: 'flame', dmg: 2, speed: 6, life: 50 } },
+  espadaHielo: { name: 'Espada de hielo', type: 'melee', dmg: 2, range: 56, cooldown: 18, duration: 11, element: 'ice', freeze: 150,
+                 shot: { kind: 'iceRay', dmg: 1, speed: 10, life: 45 } },
 };
 const WEAPON_ORDER = ['baston', 'espada', 'lunchacos', 'estrellas', 'arco', 'espadaFuego', 'espadaHielo'];
 

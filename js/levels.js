@@ -49,6 +49,7 @@ class LevelBuilder {
 function buildCity() {
   const b = new LevelBuilder(208, 'city');
   b.ground(0, 30);
+  b.item('pocion', 66, 12);  // poción antimosquitos
   b.arc(5, 12, 5);
   b.plat(11, 11, 4); b.coins(11, 10, 4);
   b.block(18, 12, 2, 2);
@@ -122,6 +123,7 @@ function buildCity() {
 function buildForest() {
   const b = new LevelBuilder(228, 'forest');
   b.ground(0, 22);
+  b.item('pocion', 50, 12);  // poción antimosquitos
   b.arc(5, 12, 4);
   b.plat(9, 11, 3); b.plat(13, 8, 3); b.coins(13, 7, 3);
   b.enemy('piton', 18, 13);
@@ -196,6 +198,7 @@ function buildForest() {
 function buildCastle() {
   const b = new LevelBuilder(248, 'castle');
   b.ground(0, 26);
+  b.item('pocion', 135, 12);  // poción antimosquitos
   b.item('weapon:arco', 8, 12);
   b.enemy('lobo', 16, 13);
   b.block(20, 11, 3, 3); b.coins(20, 10, 3);
@@ -264,6 +267,7 @@ function buildCastle() {
 function buildBeach() {
   const b = new LevelBuilder(228, 'beach');
   b.ground(0, 24);
+  b.item('pocion', 36, 12);  // poción antimosquitos
   b.arc(5, 12, 4);
   b.plat(9, 11, 3); b.coins(9, 10, 3);
   b.enemy('escorpion', 16, 13);
@@ -331,6 +335,7 @@ function buildBeach() {
 function buildIce() {
   const b = new LevelBuilder(228, 'ice');
   b.ground(0, 26);
+  b.item('pocion', 20, 12);  // poción antimosquitos
   b.arc(5, 12, 4);
   b.enemy('lobo', 14, 13);
   b.plat(17, 11, 3); b.coins(17, 10, 3);
@@ -393,6 +398,7 @@ function buildIce() {
 function buildVolcano() {
   const b = new LevelBuilder(228, 'volcano');
   b.ground(0, 30);
+  b.item('pocion', 14, 12);  // poción antimosquitos
   b.item('escudo', 6, 12);
   b.arc(10, 12, 4);
   b.enemy('monstruitoFuego', 18, 13);

@@ -17,7 +17,7 @@ Requisitos originales del cliente: [prompt_incial.md](prompt_incial.md). Manual 
 
 | Archivo | Contenido |
 |---|---|
-| `js/config.js` | Constantes: `TILE`, `ROWS`, `VIEW_W/H`, `GROUND_ROW=14`, `PHYS`, `T` (tipos de casilla), `WEAPONS`/`WEAPON_ORDER` (7 armas; `element`/`freeze` en las espadas elementales), `ARMORS`/`ARMOR_ORDER`, `LAVA_THEMES`, `clamp` |
+| `js/config.js` | Constantes: `TILE`, `ROWS`, `VIEW_W/H`, `GROUND_ROW=14`, `PHYS`, `T` (tipos de casilla), `WEAPONS`/`WEAPON_ORDER` (7 armas; `element`/`freeze`/`shot` en las espadas elementales), `ARMORS`/`ARMOR_ORDER`, `LAVA_THEMES`, `clamp` |
 | `js/audio.js` | `Sound` (efectos `Sound.play(nombre)`, música `Sound.playMusic(clave de SONGS)`). Se inicia en el primer gesto del usuario |
 | `js/input.js` | `Input`: `keymap` código→acciones, `down(a)`, `pressed(a)` (flanco), pulsos táctiles. `endFrame()` tras cada `update` |
 | `js/physics.js` | `tileAt`, `isSolid`, `overlap`, `moveAndCollide` (AABB vs casillas; `PLATFORM` solo se pisa desde arriba; con `e.lavaWalk` el líquido se pisa), `groundAhead` |
@@ -31,7 +31,7 @@ Requisitos originales del cliente: [prompt_incial.md](prompt_incial.md). Manual 
 | `js/main.js` | Arranque, escalado, bucle con acumulador. `window.game` para depurar |
 
 ### Estados de `Game`
-`title → intro → playing ⇄ paused`, `playing → dying → playing | gameover`, `playing → levelclear → intro (siguiente) | ending → title`. `ending` es la escena del rescate de la familia (línea de tiempo por `timer` en `updateEnding`/`drawEnding`, posiciones en `ENDING`).
+`title → intro → playing ⇄ paused`, `playing → dying → playing | gameover`, `playing → levelclear → intro (siguiente) | ending → title`. `ending` es la escena del rescate de la familia: el jugador maneja al ninja (`this.end`, coordenadas de pantalla) y abre la jaula golpeando o disparando al candado `LOCK_HITS` veces (`hitLock`); luego la animación sigue por `end.open` (frames desde la apertura). Posiciones en `ENDING`.
 
 ### Contrato que usan las entidades (`g` = Game)
 `g.level, g.player, g.enemies, g.projectiles, g.particles, g.items, g.camX, g.state, g.shake`,
@@ -41,14 +41,14 @@ Requisitos originales del cliente: [prompt_incial.md](prompt_incial.md). Manual 
 
 ### Reglas de juego clave
 - Pisar a un enemigo normal lo mata de un golpe; pisar al jefe quita 2. `stomp` = cae (`vy>0.5`) y `prevBottom` estaba sobre la parte alta.
-- Mosquito (`lethal`) mata al instante si no se le pisa.
+- Mosquito (`lethal`) mata al instante si no se le pisa, salvo con poción (`inv.pocion`, objeto `pocion`, una por mundo antes del primer mosquito): salva de una picadura y se gasta.
 - Daño: primero gasta escudo de armadura (`shield`, se regenera), luego corazones. `immune: 'fire'|'ice'` anula ese elemento.
 - Caer a agujero/agua/lava: −1 corazón y vuelve a `lastSafe`. Morir: −1 vida y vuelve al último checkpoint (los checkpoints rellenan corazones).
 - Arena del jefe: al pasar `arenaStart+2` se cierra un muro en la columna `arenaStart` y la cámara se fija. Las arenas miden 30 casillas (= 960 px). Si mueres, el muro se abre y el jefe conserva su vida (`bossHpSaved`).
 - El jefe suelta el diamante → se lanza con X → portal → `levelClear()` (guarda progreso).
 - Objetos de armas/armaduras ya poseídas no se vuelven a generar.
-- Inventario `inv = { weapons, weapon, armors, armor, escudo }`. Objetos sueltos: `coin`, `heart`, `life` (vida extra, en un escondite de cada mundo), `escudo`, `diamond`, `weapon:id`, `armor:id`.
-- Espadas elementales: doble daño si `enemigo.d.weak === W.element` (también jefes con `BOSS_TYPES[].weak`); la de hielo congela (`frozen`) a enemigos no `fiery`. Congelados no hacen daño.
+- Inventario `inv = { weapons, weapon, armors, armor, escudo }`. Objetos sueltos: `coin`, `heart`, `pocion`, `life` (vida extra, en un escondite de cada mundo), `escudo`, `diamond`, `weapon:id`, `armor:id`.
+- Espadas elementales: además del tajo lanzan `W.shot` (fuego → `flame`, hielo → `iceRay`, que congela); los proyectiles con `element` pasan por `weaponHit`. Doble daño si `enemigo.d.weak === W.element` (también jefes con `BOSS_TYPES[].weak`); la de hielo congela (`frozen`) a enemigos no `fiery`. Congelados no hacen daño.
 - Escudo: anula daño de elemento `'bomb'` y `'lava'`, y en `LAVA_THEMES` permite andar sobre la lava (`player.lavaWalk`).
 - Mundo `ice`: el suelo resbala (aceleración y fricción reducidas en `Player.update`).
 - Una armadura por mundo: metal, roca, fuego, diamante, hielo, dorada (mundos 1-6).

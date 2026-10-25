@@ -218,7 +218,15 @@ class Game {
         } else if (e.frozen > 0) {
           // los enemigos congelados no hacen daño
         } else if (e.d.lethal) {
-          if (p.invuln === 0) {
+          if (p.invuln === 0 && this.inv.pocion) {
+            // la poción salva de una picadura y se gasta
+            this.inv.pocion = false;
+            e.kill(this);
+            p.invuln = 90;
+            Sound.play('power');
+            this.sparks(p.x + p.w / 2, p.y + 10, '#3ddc84', 24);
+            this.floatText(p.x + p.w / 2, p.y - 10, '¡La poción te ha salvado!', '#3ddc84');
+          } else if (p.invuln === 0) {
             this.floatText(p.x + p.w / 2, p.y - 10, '¡Picadura!', '#ff5a5a');
             this.playerDie();
             return;
@@ -291,13 +299,16 @@ class Game {
       } else {
         for (const e of this.enemies) {
           if (!e.dead && this.isActive(e) && overlap(pr, e)) {
-            e.hurt(this, pr.dmg, cx - pr.vx);
+            if (pr.element) this.weaponHit(e, { dmg: pr.dmg, element: pr.element, freeze: pr.freeze }, cx - pr.vx);
+            else e.hurt(this, pr.dmg, cx - pr.vx);
             pr.dead = true;
             break;
           }
         }
         if (!pr.dead && this.boss && !this.boss.dying && !this.boss.ghost && overlap(pr, this.boss.hitbox())) {
-          if (this.boss.hurt(this, pr.dmg) || this.boss.state === 'intro') pr.dead = true;
+          const weak = pr.element && this.boss.d.weak === pr.element;
+          if (this.boss.hurt(this, pr.dmg * (weak ? 2 : 1)) || this.boss.state === 'intro') pr.dead = true;
+          if (weak && pr.dead) this.floatText(this.boss.cx, this.boss.y - 10, '¡Súper golpe!', '#ffe14d');
           if (pr.dead) this.sparks(cx, pr.y, '#ffffff', 6);
         }
         if (!pr.dead) {
@@ -488,6 +499,14 @@ class Game {
       Sound.play('power');
       this.sparks(cx, cy, '#7dff9a', 20);
       this.say('¡Vida extra!', '¡Has encontrado un escondite secreto!');
+      return;
+    }
+    if (it.kind === 'pocion') {
+      if (this.inv.pocion) this.score += 100;
+      this.inv.pocion = true;
+      Sound.play('power');
+      this.sparks(cx, cy, '#3ddc84', 20);
+      this.say('¡Poción antimosquitos!', 'Te salva de una picadura de mosquito (solo una vez)');
       return;
     }
     if (it.kind === 'escudo') {
@@ -724,6 +743,7 @@ class Game {
     Art.text(ctx, 'x' + this.lives, 202, 29, 20, '#fff', 'left');
     Art.ellipse(ctx, 185, 55, 8, 9, '#e0a800'); Art.ellipse(ctx, 185, 55, 5.5, 6.5, '#ffd43b');
     Art.text(ctx, 'x' + this.coins, 202, 56, 18, '#ffe14d', 'left');
+    if (this.inv.pocion) Art.potion(ctx, 272, 41, 12 + Math.sin(this.frame * 0.12));
 
     // mundo y puntos
     Art.text(ctx, this.world.short, VIEW_W / 2 - 40, 24, 18, '#ffffff');
@@ -878,70 +898,144 @@ class Game {
     this.particles = [];
     this.camX = 0;
     this.shake = 0;
+    // el jugador maneja al ninja y tiene que romper el candado de la jaula
+    this.end = { x: 80, h: 0, vy: 0, facing: 1, jumps: 2, flip: 0, moving: false,
+                 atk: 0, cd: 0, shots: [], hits: 0, wobble: 0, open: -1 };
     Sound.stopMusic();
   }
 
   updateEnding() {
-    const t = this.timer;
+    const E = ENDING, n = this.end;
     this.updateParticles();
-    if (t === 165 || t === 178) { Sound.play('clank'); this.sparks(ENDING.lockX, ENDING.lockY, '#ffe14d', 12); }
-    if (t === 190) { Sound.play('power'); this.sparks(ENDING.lockX, ENDING.lockY, '#ffffff', 26); }
-    if (t === 205) Sound.play('portal');
-    if (t === 380) { Sound.play('victory'); Sound.playMusic('ending'); }
-    if (t > 380 && t % 30 === 0) {
-      for (const x of [ENDING.dadTo, ENDING.momTo]) this.particles.push(new Particle(x + (Math.random() - 0.5) * 30, ENDING.floor - 150, (Math.random() - 0.5), -1, '#ff6b8b', 60, 22, -0.01, '♥'));
+    if (n.open >= 0) n.open++;
+    const o = n.open;
+
+    // --- control del ninja (en píxeles de pantalla, escala 1,6) ---
+    const dir = (Input.down('right') ? 1 : 0) - (Input.down('left') ? 1 : 0);
+    n.moving = dir !== 0;
+    if (dir) n.facing = dir;
+    n.x += dir * 3.5;
+    // mientras salen los papás, el ninja se aparta un poco
+    if (o > 80 && o < 200 && n.x > 440) { n.x -= 2; n.moving = true; n.facing = -1; }
+    n.x = clamp(n.x, 30, o >= 0 ? VIEW_W - 30 : E.cageX - 85 - 22);
+    if (Input.pressed('jump') && n.jumps > 0) {
+      n.vy = n.h === 0 ? -11 : -9.5;
+      if (n.h > 0) n.flip = 24;
+      n.jumps--;
+      Sound.play(n.h === 0 ? 'jump' : 'djump');
     }
-    if (t > 400 && t % 24 === 0) this.firework(80 + Math.random() * (VIEW_W - 160), 50 + Math.random() * 120);
-    if (t > 520 && (Input.pressed('start') || Input.pressed('jump'))) {
-      this.save = null; this.state = 'title'; this.level = null; this.particles = [];
+    n.vy += 0.5; n.h -= n.vy;
+    if (n.h <= 0) { n.h = 0; n.vy = 0; n.jumps = 2; }
+    if (n.flip > 0) n.flip--;
+    if (n.atk > 0) n.atk--;
+    if (n.cd > 0) n.cd--;
+
+    // --- atacar: golpe de cerca o disparo ---
+    const W = WEAPONS[this.inv.weapon] || WEAPONS.baston;
+    if (Input.pressed('attack') && n.cd === 0) {
+      n.cd = W.cooldown; n.atk = W.duration || 10;
+      const kind = W.type === 'proj' ? W.proj : W.shot ? W.shot.kind : null;
+      if (kind) n.shots.push(new Projectile(kind, n.x + n.facing * 30, E.floor - n.h - 46, n.facing * 8, 0, 'player', 1, { element: W.element }));
+      Sound.play(W.type === 'proj' ? 'throw' : 'swing');
+      const reach = W.type === 'melee' ? (W.range || 52) * 1.6 + 10 : 0;
+      if (o < 0 && reach && n.facing === 1 && E.lockX - n.x < reach && n.h < 120) this.hitLock();
+    }
+    for (const s of n.shots) {
+      s.x += s.vx; s.t++;
+      const cx = s.x + s.w / 2;
+      if (o < 0 && s.vx > 0 && cx > E.lockX - 8 && Math.abs(s.y + s.h / 2 - E.lockY) < 70) { s.dead = true; this.hitLock(); }
+      if (cx < -40 || cx > VIEW_W + 40) s.dead = true;
+    }
+    n.shots = n.shots.filter(s => !s.dead);
+    if (n.wobble > 0) n.wobble--;
+
+    // --- después de abrir la jaula ---
+    if (o === 15) Sound.play('portal');
+    if (o === 190) { Sound.play('victory'); Sound.playMusic('ending'); }
+    if (o > 190 && o % 30 === 0) {
+      for (const x of [E.dadTo, E.momTo]) this.particles.push(new Particle(x + (Math.random() - 0.5) * 30, E.floor - 150, (Math.random() - 0.5), -1, '#ff6b8b', 60, 22, -0.01, '♥'));
+    }
+    if (o > 210 && o % 24 === 0) this.firework(80 + Math.random() * (VIEW_W - 160), 50 + Math.random() * 120);
+    if (o > 330 && Input.pressed('start')) {
+      this.save = null; this.state = 'title'; this.level = null; this.particles = []; this.end = null;
       Sound.playMusic('title');
     }
   }
 
+  // Un golpe al candado: hacen falta LOCK_HITS para abrir la jaula
+  hitLock() {
+    const E = ENDING, n = this.end;
+    n.hits++;
+    n.wobble = 14;
+    this.sparks(E.lockX, E.lockY, '#ffe14d', 12);
+    if (n.hits < LOCK_HITS) {
+      Sound.play('clank');
+      this.floatText(E.lockX, E.lockY - 85, n.hits === LOCK_HITS - 1 ? '¡Uno más!' : '¡Clanc!', '#ffe14d');
+    } else {
+      n.open = 0;
+      Sound.play('power');
+      this.sparks(E.lockX, E.lockY, '#ffffff', 26);
+      this.floatText(E.lockX, E.lockY - 85, '¡Abierto!', '#7dff9a');
+    }
+  }
+
   drawEnding() {
-    const ctx = this.ctx, cx = VIEW_W / 2, f = this.frame, t = this.timer;
-    const E = ENDING;
+    const ctx = this.ctx, cx = VIEW_W / 2, f = this.frame, E = ENDING, n = this.end, o = n.open;
     Art.dungeon(ctx, f);
 
-    // posiciones según el momento de la escena
     const ease = k => 0.5 - 0.5 * Math.cos(clamp(k, 0, 1) * Math.PI);
-    const ninjaX = 80 + (E.ninjaTo - 80) * ease(t / 150) - 60 * ease((t - 280) / 100);
-    const bars = ease((t - 205) / 70);
-    const out = ease((t - 280) / 100);
-    const happy = t > 300;
-    const hop = k => happy && t > 380 ? Math.abs(Math.sin((f + k) * 0.12)) * 18 : 0;
+    const bars = o < 0 ? 0 : ease((o - 15) / 70);
+    const out = o < 0 ? 0 : ease((o - 90) / 100);
+    const happy = o > 110;
+    const hop = k => o > 190 ? Math.abs(Math.sin((f + k) * 0.12)) * 18 : 0;
     const dadX = E.dadFrom + (E.dadTo - E.dadFrom) * out;
     const momX = E.momFrom + (E.momTo - E.momFrom) * out;
 
     // familia (dentro de la jaula al principio)
     Art.parent(ctx, dadX, E.floor - hop(0), 'dad', f, happy, out > 0 && out < 1);
     Art.parent(ctx, momX, E.floor - hop(20), 'mom', f, happy, out > 0 && out < 1);
-    Art.cage(ctx, E.cageX, E.floor, bars, t < 190, f);
+    ctx.save();
+    if (n.wobble > 0) ctx.translate(Math.sin(n.wobble * 1.7) * 3, 0);
+    Art.cage(ctx, E.cageX, E.floor, bars, o < 0, f);
+    ctx.restore();
+    // grietas del candado según los golpes
+    if (o < 0 && n.hits > 0) {
+      ctx.strokeStyle = '#5a4400'; ctx.lineWidth = 1.5; ctx.beginPath();
+      ctx.moveTo(E.lockX - 9, E.lockY - 3); ctx.lineTo(E.lockX - 3, E.lockY + 4); ctx.lineTo(E.lockX - 7, E.lockY + 10);
+      if (n.hits > 1) { ctx.moveTo(E.lockX + 9, E.lockY - 4); ctx.lineTo(E.lockX + 4, E.lockY + 3); ctx.lineTo(E.lockX + 8, E.lockY + 11); }
+      ctx.stroke();
+    }
 
-    // el ninja
-    const attacking = t > 155 && t < 190;
+    // el ninja (lo maneja el jugador)
+    const W = WEAPONS[this.inv.weapon];
     const fake = {
-      x: 0, y: 0, w: 26, h: 46, facing: 1, dead: false, invuln: 0, slow: 0,
-      flip: t > 380 && (f % 70) < 24 ? 24 - (f % 70) : 0,
-      inv: this.inv, vx: t < 150 ? 3 : 0, onGround: true, anim: f,
-      attackTimer: attacking ? 10 - (t % 12) : 0, attackCooldown: 30,
+      x: 0, y: 0, w: 26, h: 46, facing: n.facing, dead: false, invuln: 0, slow: 0, flip: n.flip,
+      inv: this.inv, vx: n.moving ? 3 * n.facing : 0, onGround: n.h === 0, vy: n.vy, anim: f,
+      attackTimer: n.atk, attackCooldown: n.cd,
     };
-    if (this.inv.weapon && WEAPONS[this.inv.weapon].type !== 'melee') fake.inv = { ...this.inv, weapon: 'espada' };
-    ctx.save(); ctx.translate(ninjaX, E.floor - hop(40)); ctx.scale(1.6, 1.6); ctx.translate(-13, -46); Art.player(ctx, fake); ctx.restore();
+    ctx.save(); ctx.translate(n.x, E.floor - n.h); ctx.scale(1.6, 1.6); ctx.translate(-13, -46); Art.player(ctx, fake); ctx.restore();
+    for (const s of n.shots) Art.projectile(ctx, s);
 
-    if (t < 150) Art.speech(ctx, E.momFrom + 10, E.floor - 140, '¡Socorro!');
-    else if (t > 290 && t < 380) Art.speech(ctx, E.dadTo + 30, E.floor - 150, '¡Gracias, ninja!');
+    if (o < 0) {
+      Art.speech(ctx, E.momFrom + 10, E.floor - 140, n.hits ? '¡Sigue así!' : '¡Socorro!');
+      // flecha que señala el candado
+      Art.text(ctx, '▼', E.lockX, E.lockY - 30 - Math.abs(Math.sin(f * 0.1)) * 10, 22, '#ffe14d');
+      Art.text(ctx, '¡Rescata a tu familia!', cx, 60, 34, '#ffe14d', 'center', '#e63946');
+      const how = W && W.type === 'proj' ? 'Dispara al candado con Z' : 'Acércate al candado y golpéalo con Z';
+      Art.text(ctx, how + '  (' + n.hits + ' / ' + LOCK_HITS + ')', cx, 102, 20, '#ffffff');
+    } else if (o > 100 && o < 190) Art.speech(ctx, E.dadTo + 30, E.floor - 150, '¡Gracias, ninja!');
 
     for (const p of this.particles) Art.particle(ctx, p);
 
-    if (t > 380) {
+    if (o > 190) {
       Art.text(ctx, '¡HAS RESCATADO A TU FAMILIA!', cx, 70, 40, '#ffe14d', 'center', '#e63946');
       Art.text(ctx, 'Has vencido a los 6 monstruos. ¡Eres el mejor ninja!', cx, 118, 20, '#ffffff');
       Art.text(ctx, 'Puntos: ' + this.score, cx, 152, 22, '#ffe14d');
     }
-    if (t > 520 && this.blink()) Art.text(ctx, 'FIN  ·  Pulsa ENTER para volver al inicio', cx, VIEW_H - 22, 18, '#ffffff');
+    if (o > 330 && this.blink()) Art.text(ctx, 'FIN  ·  Pulsa ENTER para volver al inicio', cx, VIEW_H - 22, 18, '#ffffff');
   }
 }
 
 // Posiciones de la escena final (en píxeles de pantalla)
+const LOCK_HITS = 3;
 const ENDING = { floor: 470, ninjaTo: 480, cageX: 640, lockX: 558, lockY: 400, dadFrom: 612, dadTo: 505, momFrom: 676, momTo: 572 };
