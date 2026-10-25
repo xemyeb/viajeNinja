@@ -29,6 +29,7 @@ const ENEMY_TYPES = {
   escorpion:   { name: 'Escorpión',   w: 46, h: 26, hp: 2, speed: 1.0, ai: 'charger', dash: 4.2 },
   osoPolar:    { name: 'Oso polar',   w: 58, h: 42, hp: 4, speed: 0.9, ai: 'charger', dash: 4.6, weak: 'fire' },
   monstruitoFuego: { name: 'Monstruito de fuego', w: 30, h: 30, hp: 2, ai: 'hopper', weak: 'ice', fiery: true },
+  diablillo:   { name: 'Diablillo',   w: 30, h: 40, hp: 3, speed: 1.4, ai: 'pouncer', weak: 'ice', fiery: true },
 };
 const FLYING_AI = new Set(['flyer', 'mosquito', 'dangler', 'shooterFlyer']);
 

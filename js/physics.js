@@ -4,9 +4,12 @@
 // ============================================================
 function tileAt(level, col, row) {
   if (col < 0 || col >= level.width) return T.GROUND; // bordes del nivel = pared
-  if (row < 0 || row >= ROWS) return T.EMPTY;
+  if (row < 0 || row >= (level.rows || ROWS)) return T.EMPTY;
   return level.tiles[row * level.width + col];
 }
+
+// Borde inferior del nivel en píxeles (los niveles altos, como el descenso, tienen más filas)
+function levelBottom(level) { return (level.rows || ROWS) * TILE; }
 
 function isSolid(t) { return t === T.GROUND || t === T.BLOCK; }
 

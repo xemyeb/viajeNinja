@@ -1,4 +1,4 @@
-// Bot headless: recorre los 3 mundos en Node (sin navegador) para detectar errores.
+// Bot headless: recorre todos los mundos en Node (sin navegador) para detectar errores.
 // Uso: node tools/sim.js            -> modo "trampa" (invencible, daña al jefe) para verificar el flujo completo
 //      node tools/sim.js --fair     -> sin trampas, cuenta muertes (bot torpe: solo orientativo)
 'use strict';
@@ -37,16 +37,18 @@ for (let w = 0; w < WORLDS.length; w++) {
   g.lives = 99;
   g.loadWorld(w);
   let maxX = 0, deaths = 0, cleared = false;
-  for (let f = 0; f < 60 * 300; f++) {
+  for (let f = 0; f < 60 * 600; f++) {
     hold.clear();
     const p = g.player;
     if (g.state === 'intro' && g.timer > 40) Input.pulses.add('start');
     if (g.state === 'gameover') Input.pulses.add('start');
-    const dia = g.items.find(i => i.kind === 'diamond');
+    const dia = g.items.find(i => i.kind === 'diamond' || i.kind === 'pocionVida');
     if (dia) hold.add(dia.x > p.x ? 'right' : 'left');
     else if (g.portal) hold.add(g.portal.box().x > p.x ? 'right' : 'left');
     else hold.add('right');
-    if (f % 40 < 14 && !g.bossDone) hold.add('jump');
+    // con la espada láser mantiene el salto para volar (suelta un momento cada segundo)
+    if (p.inv.weapons.includes('espadaLaser') && !g.arenaActive) { if (f % 60 < 52) hold.add('jump'); }
+    else if (f % 40 < 14 && !g.bossDone) hold.add('jump');
     if (f % 9 === 0) Input.pulses.add('attack');
     if (g.hasDiamond) Input.pulses.add('diamond');
     if (!FAIR) {
@@ -60,6 +62,6 @@ for (let w = 0; w < WORLDS.length; w++) {
     if (g.state === 'levelclear') { cleared = true; break; }
   }
   if (!FAIR && !cleared) failed = true;
-  console.log(`Mundo ${w + 1}: ${cleared ? 'SUPERADO' : 'NO superado'} · col máx ${Math.floor(maxX / TILE)}/${g.level.width} · muertes ${deaths} · estado ${g.state}`);
+  console.log(`Mundo ${w + 1}: ${cleared ? 'SUPERADO' : 'NO superado'} · parte ${g.part + 1} · col máx ${Math.floor(maxX / TILE)}/${g.level.width} · muertes ${deaths} · estado ${g.state}`);
 }
 process.exit(failed ? 1 : 0);

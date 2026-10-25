@@ -52,3 +52,15 @@ Objetos
 Escena final
 - La escena final del ninja salvando a los padres, que no sea todo animación, sino que se pueda manejar al ninja y se tenga que abrir la celda por la acción del jugador. 
 
+Vamos a realizar nuevos cambios
+- En cada nivel, las pruebas tienen que ser más diferentes y variadas.
+- Despues de la pantalla de lava, en la escena f¡nal, vendran unos mosqu¡tos y le p¡caran  al padré y y mor¡rá. Entonces el ninja le dice a la madre que va a viajar al infierno a por una poción para salvar al padre.
+- Despues de eso, añadiremos un nuevo nivel (el infierno). la primera parte será un descenso al infierno y cuando hayamos bajado, será el mundo lineal con diferentes pruebas a todos los niveles anteriores. Al final de la pantalla, estarán todos los jefes finales de todos los niveles anteriores
+- En este nuevo nivel, habrá una nueva arma: Una espada laser, que cuando la consigues además puedes volar. Y un nuevo objeto, que es un escudo que resiste hasta tres golpes de los monstruos finales. Además de la poción que debe conseguir para salvar al padre.
+- Al acabar este nuevo nivel, aparece otra escena final, donde el ninja vuelve con sus padres y le da la poción al padre y lo salva.
+
+
+Aumenta un poco el nivel de dificultad de los siguientes monstruos:
+- El caballero oscuro
+- Ice kill
+- Heavy Metal

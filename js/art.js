@@ -66,8 +66,9 @@ const Art = {
   // ============================================================
   //  FONDOS con paralaje
   // ============================================================
-  background(ctx, theme, camX, f) {
-    if (theme === 'city') this.bgCity(ctx, camX, f);
+  background(ctx, theme, camX, f, camY = 0) {
+    if (theme === 'hell') this.bgHell(ctx, camX, f, camY);
+    else if (theme === 'city') this.bgCity(ctx, camX, f);
     else if (theme === 'forest') this.bgForest(ctx, camX, f);
     else if (theme === 'beach') this.bgBeach(ctx, camX, f);
     else if (theme === 'ice') this.bgIce(ctx, camX, f);
@@ -187,11 +188,13 @@ const Art = {
   // ============================================================
   //  CASILLAS
   // ============================================================
-  tiles(ctx, level, camX, f) {
+  tiles(ctx, level, camX, f, camY = 0) {
     const ts = TILESET[level.theme];
     const c0 = Math.max(0, Math.floor(camX / TILE) - 1);
     const c1 = Math.min(level.width - 1, c0 + Math.ceil(VIEW_W / TILE) + 2);
-    for (let r = 0; r < ROWS; r++) {
+    const r0 = Math.max(0, Math.floor(camY / TILE) - 1);
+    const r1 = Math.min(level.rows || ROWS, r0 + ROWS + 2);
+    for (let r = r0; r < r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.tiles[r * level.width + c];
         if (!t) continue;
@@ -306,9 +309,9 @@ const Art = {
     if (top) {
       const w1 = Math.sin((x + f * 2) * 0.05) * 3;
       ctx.fillRect(x, y + 6 + w1, TILE, TILE - 6 - w1);
-      ctx.fillStyle = LAVA_THEMES.has(level.theme) ? '#ffd23f' : 'rgba(255,255,255,0.6)';
+      ctx.fillStyle = LAVA_LOOK.has(level.theme) ? '#ffd23f' : 'rgba(255,255,255,0.6)';
       ctx.fillRect(x, y + 5 + w1, TILE, 3);
-      if (LAVA_THEMES.has(level.theme) && this.hash(c + Math.floor(f / 30)) > 0.85) this.circle(ctx, x + 16, y + 4 + w1, 4, '#ffd23f');
+      if (LAVA_LOOK.has(level.theme) && this.hash(c + Math.floor(f / 30)) > 0.85) this.circle(ctx, x + 16, y + 4 + w1, 4, '#ffd23f');
     } else ctx.fillRect(x, y, TILE, TILE);
   },
 
@@ -335,6 +338,15 @@ const Art = {
     ctx.beginPath(); ctx.moveTo(-8, -46); ctx.quadraticCurveTo(-16, -48 + wv, -22 - tr, -44 + wv * 1.5); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-8, -45); ctx.quadraticCurveTo(-15, -42 - wv, -20 - tr, -38 - wv); ctx.stroke();
 
+    // alas de energía al volar con la espada láser
+    if (p.flying) {
+      const fl = Math.sin(p.anim * 0.8) * 0.35;
+      for (const [rot, col] of [[-0.5 - fl, 'rgba(255,77,210,0.7)'], [-0.9 + fl, 'rgba(125,249,255,0.7)']]) {
+        ctx.save(); ctx.translate(-6, -30); ctx.rotate(rot);
+        this.ellipse(ctx, -14, 0, 16, 6, col);
+        ctx.restore();
+      }
+    }
     if (p.inv.escudo) this.shieldItem(ctx, -9, -27, 9);
 
     // piernas
@@ -439,7 +451,8 @@ const Art = {
         break;
     }
     if (id === 'espadaFuego' || id === 'espadaHielo') this.elementSword(ctx, id === 'espadaFuego' ? 'fire' : 'ice', p.anim);
-    if (id === 'baston' || id === 'espada' || id === 'espadaFuego' || id === 'espadaHielo') this.circle(ctx, 0, 0, 3.5, PAL.skin);
+    if (id === 'espadaLaser') this.laserSword(ctx, p.anim);
+    if (id === 'baston' || id === 'espada' || id === 'espadaFuego' || id === 'espadaHielo' || id === 'espadaLaser') this.circle(ctx, 0, 0, 3.5, PAL.skin);
     ctx.restore();
   },
   shuriken(ctx, x, y, r, rot, color = '#d0d8e2') {
@@ -486,6 +499,7 @@ const Art = {
       case 'escorpion': this.scorpion(ctx, e); break;
       case 'osoPolar': this.quad(ctx, e, { body: '#f4f7fa', dark: '#d3dde6', belly: '#ffffff', snout: '#e6edf2', head: 1.05, eye: '#222', tailW: 3 }); break;
       case 'monstruitoFuego': this.fireling(ctx, e); break;
+      case 'diablillo': this.imp(ctx, e); break;
     }
     if (e.frozen > 0) {
       ctx.globalAlpha = 0.55;
@@ -870,6 +884,8 @@ const Art = {
     }
     if (it.kind === 'life') { this.lifeItem(ctx, cx, cy, it.t); return; }
     if (it.kind === 'pocion') { this.circle(ctx, cx, cy, 20 + Math.sin(it.t * 0.1) * 2, 'rgba(61,220,132,0.22)'); this.potion(ctx, cx, cy, 15); return; }
+    if (it.kind === 'escudoJefe') { this.circle(ctx, cx, cy, 21 + Math.sin(it.t * 0.1) * 2, 'rgba(201,182,255,0.25)'); this.bossShield(ctx, cx, cy, 15); return; }
+    if (it.kind === 'pocionVida') { this.circle(ctx, cx, cy, 22 + Math.sin(it.t * 0.1) * 3, 'rgba(255,107,139,0.3)'); this.lifePotion(ctx, cx, cy, 16); return; }
     if (it.kind === 'escudo') { this.circle(ctx, cx, cy, 20, 'rgba(255,220,120,0.2)'); this.shieldItem(ctx, cx, cy, 14); return; }
     if (it.kind === 'heart') { this.heart(ctx, cx, cy, 11, '#ff4d6d'); this.circle(ctx, cx - 4, cy - 3, 2, '#ffc2cd'); return; }
     if (it.kind === 'diamond') { this.diamond(ctx, cx, cy, 13, it.t); return; }
@@ -892,6 +908,10 @@ const Art = {
       case 'espadaFuego': case 'espadaHielo':
         ctx.rotate(-0.8); ctx.scale(s / 24, s / 24); ctx.translate(-20, 0);
         this.elementSword(ctx, id === 'espadaFuego' ? 'fire' : 'ice', 0);
+        break;
+      case 'espadaLaser':
+        ctx.rotate(-0.8); ctx.scale(s / 24, s / 24); ctx.translate(-20, 0);
+        this.laserSword(ctx, 0);
         break;
       case 'baston': ctx.rotate(-0.8); this.box(ctx, -s, -2, s * 2, 4, 2, '#a0703f'); ctx.fillStyle = '#5e3b1a'; ctx.fillRect(-s, -2, 4, 4); ctx.fillRect(s - 4, -2, 4, 4); break;
       case 'espada': ctx.rotate(-0.8); ctx.fillStyle = '#5e3b1a'; ctx.fillRect(-s, -2, 6, 4); ctx.fillStyle = '#d4a017'; ctx.fillRect(-s + 6, -5, 3, 10); this.poly(ctx, [-s + 9, -2.5, s - 3, -2.5, s + 2, 0, s - 3, 2.5, -s + 9, 2.5], '#e2e8ef'); break;
@@ -951,12 +971,13 @@ const Art = {
       ctx.restore();
       return;
     }
+    if (pl.style === 'blink') { this.blinkPlat(ctx, pl, f); return; }
     let sx = 0;
     if (pl.style === 'falling' && pl.state === 'shake') sx = (Math.random() - 0.5) * 3;
     const ts = TILESET[theme];
     const x = pl.x + sx, y = pl.y;
     if (pl.style === 'falling') {
-      this.box(ctx, x, y, pl.w, pl.h, 4, ({ forest: ts.plat, beach: '#c9a46a', ice: '#a9dcf0', volcano: '#4a3a3a' })[theme] || '#8a7f72');
+      this.box(ctx, x, y, pl.w, pl.h, 4, ({ forest: ts.plat, beach: '#c9a46a', ice: '#a9dcf0', volcano: '#4a3a3a', hell: '#5a1f2a' })[theme] || '#8a7f72');
       ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(x + pl.w * 0.3, y); ctx.lineTo(x + pl.w * 0.4, y + 8); ctx.lineTo(x + pl.w * 0.32, y + pl.h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x + pl.w * 0.7, y); ctx.lineTo(x + pl.w * 0.62, y + 9); ctx.stroke();

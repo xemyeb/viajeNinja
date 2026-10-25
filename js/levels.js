@@ -3,25 +3,29 @@
 //  Niveles / mundos
 //  Coordenadas en casillas (32 px). Fila 14 = suelo normal.
 //  Un enemigo de suelo en fila 13 está de pie sobre el suelo.
+//  Los niveles pueden tener más de 17 filas (rows): la cámara
+//  también sigue al ninja en vertical (descenso al infierno).
 // ============================================================
 
 class LevelBuilder {
-  constructor(width, theme) {
+  constructor(width, theme, rows = ROWS) {
     this.width = width;
     this.theme = theme;
-    this.tiles = new Uint8Array(width * ROWS);
+    this.rows = rows;
+    this.tiles = new Uint8Array(width * rows);
     this.spawns = [];
     this.start = { x: 2, y: GROUND_ROW - 1 };
     this.arenaStart = null;
+    this.exit = null;
   }
-  set(x, y, t) { if (x >= 0 && x < this.width && y >= 0 && y < ROWS) this.tiles[y * this.width + x] = t; }
+  set(x, y, t) { if (x >= 0 && x < this.width && y >= 0 && y < this.rows) this.tiles[y * this.width + x] = t; }
   fill(x0, y0, x1, y1, t) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) this.set(x, y, t); }
 
-  ground(x0, x1, top = GROUND_ROW) { this.fill(x0, top, x1, ROWS - 1, T.GROUND); }
+  ground(x0, x1, top = GROUND_ROW) { this.fill(x0, top, x1, this.rows - 1, T.GROUND); }
   block(x, y, w = 1, h = 1) { this.fill(x, y, x + w - 1, y + h - 1, T.BLOCK); }
   plat(x, y, w) { this.fill(x, y, x + w - 1, y, T.PLATFORM); }
   spikes(x0, x1, row = GROUND_ROW - 1) { this.fill(x0, row, x1, row, T.SPIKES); }
-  liquid(x0, x1) { this.fill(x0, 15, x1, ROWS - 1, T.LIQUID); }
+  liquid(x0, x1, top = 15) { this.fill(x0, top, x1, this.rows - 1, T.LIQUID); }
 
   coins(x, y, n) { for (let i = 0; i < n; i++) this.item('coin', x + i, y); }
   arc(x, y, n) { for (let i = 0; i < n; i++) this.item('coin', x + i, y - Math.round(Math.sin(i / Math.max(1, n - 1) * Math.PI) * 2)); }
@@ -33,11 +37,18 @@ class LevelBuilder {
   jet(x, row = GROUND_ROW, phase = 0) { this.spawns.push({ type: 'jet', x, row, phase }); }
   crusher(x, y) { this.spawns.push({ type: 'crusher', x, y }); }
   friend(x, y) { this.spawns.push({ type: 'friend', x, y }); }
+  spring(x, row, style, phase) { this.spawns.push({ type: 'spring', x, row, style, phase }); }
+  dropper(x, y, style) { this.spawns.push({ type: 'dropper', x, y, style }); }
+  firebar(x, y, len, speed) { this.spawns.push({ type: 'firebar', x, y, len, speed }); }
+  wind(x0, y0, x1, y1, fx, fy, gust) { this.spawns.push({ type: 'wind', x0, y0, x1, y1, fx, fy, gust }); }
+  blink(x, y, w, phase) { this.spawns.push({ type: 'blink', x, y, w, phase }); }
+  exitAt(x, y, w, h) { this.exit = { x: x * TILE, y: y * TILE, w: w * TILE, h: h * TILE }; } // salida a la parte 2
   arena(x) { this.arenaStart = x; }
   boss(kind, x) { this.spawns.push({ type: 'boss', kind, x }); }
 
   build() {
-    return { width: this.width, theme: this.theme, tiles: this.tiles, spawns: this.spawns, start: this.start, arenaStart: this.arenaStart };
+    return { width: this.width, rows: this.rows, theme: this.theme, tiles: this.tiles, spawns: this.spawns, start: this.start,
+             arenaStart: this.arenaStart, exit: this.exit };
   }
 }
 
@@ -45,6 +56,7 @@ class LevelBuilder {
 //  MUNDO 1 · La ciudad
 //  Animales: lobo, murciélago, mosquito, guepardo
 //  Arma: espada · Armadura: metal · Vida extra escondida en la azotea
+//  Prueba especial: el muro alto que solo se sube con el trampolín
 // ------------------------------------------------------------
 function buildCity() {
   const b = new LevelBuilder(208, 'city');
@@ -83,10 +95,14 @@ function buildCity() {
   b.plat(101, 3, 3);
   b.item('life', 102, 2);
   b.coins(105, 5, 3);
-  b.enemy('guepardo', 112, 13);
-  b.plat(115, 11, 3);
-  b.item('armor:metal', 116, 10);
-  b.checkpoint(121);
+  b.enemy('guepardo', 110, 13);
+  b.plat(113, 11, 3);
+  b.item('armor:metal', 114, 10);
+  // muro muy alto: ¡solo se sube con el trampolín!
+  b.spring(118, 13, 'trampoline');
+  b.block(119, 6, 2, 8);
+  b.coins(119, 5, 2);
+  b.checkpoint(122);
 
   // tejados
   b.ground(125, 132, 12);
@@ -119,6 +135,7 @@ function buildCity() {
 //  Animales: tigre, pitón, araña, hipopótamo, mosquito
 //  Dragones buenos: uno te acompaña y otro te lleva sobre el río
 //  Armas: lunchacos y estrellas · Armadura: roca · Vida extra en las ramas
+//  Prueba especial: campo de espinas con setas saltarinas
 // ------------------------------------------------------------
 function buildForest() {
   const b = new LevelBuilder(228, 'forest');
@@ -165,7 +182,8 @@ function buildForest() {
   // ramas secretas con una vida extra
   b.plat(138, 8, 2); b.plat(141, 5, 3);
   b.item('life', 142, 4);
-  b.spikes(145, 147);
+  // campo de espinas: ¡bota en las setas saltarinas!
+  b.spikes(143, 144); b.spring(145, 13, 'mushroom'); b.spikes(146, 147); b.spring(148, 13, 'mushroom'); b.spikes(149, 150);
   b.enemy('dragoncito', 150, 6);
   b.enemy('hipopotamo', 154, 13);
   b.item('armor:roca', 158, 12);
@@ -194,6 +212,7 @@ function buildForest() {
 //  Animales: lobo, león, guepardo, rinoceronte, murciélago,
 //            tigre, araña, mosquito
 //  Arma: arco · Armadura: fuego · Vida extra en lo alto de la torre
+//  Prueba especial: pasillo de barras de fuego giratorias
 // ------------------------------------------------------------
 function buildCastle() {
   const b = new LevelBuilder(248, 'castle');
@@ -247,10 +266,12 @@ function buildCastle() {
   b.falling(172, 12, 2); b.falling(175, 11, 2); b.falling(178, 12, 2);
   b.coins(172, 10, 8);
   b.ground(183, 247);
-  b.enemy('guepardo', 190, 13);
-  b.enemy('caballerito', 196, 13);
-  b.enemy('mosquito', 200, 8);
-  b.enemy('rinoceronte', 206, 13);
+  // pasillo de barras de fuego: pasa cuando la barra esté arriba
+  b.firebar(188, 11, 4, 0.04);
+  b.firebar(194, 11, 4, -0.045);
+  b.enemy('guepardo', 200, 13);
+  b.enemy('mosquito', 203, 8);
+  b.enemy('rinoceronte', 207, 13);
   b.checkpoint(212);
 
   b.arena(216);
@@ -263,6 +284,7 @@ function buildCastle() {
 //  MUNDO 4 · La playa
 //  Animales: escorpión, pitón, guepardo, hipopótamo, mosquito
 //  Arma: espada de hielo · Armadura: diamante · Vida extra en el acantilado
+//  Pruebas especiales: cocos que caen de las palmeras y el géiser que te sube a la roca
 // ------------------------------------------------------------
 function buildBeach() {
   const b = new LevelBuilder(228, 'beach');
@@ -293,6 +315,8 @@ function buildBeach() {
   b.moving(77, 11, 82, 11, 2, 0.022);
   b.coins(73, 9, 9);
   b.ground(85, 130);
+  // palmeras: ¡los cocos caen cuando pasas debajo!
+  b.dropper(93, 7, 'coconut'); b.dropper(107, 7, 'coconut'); b.dropper(127, 7, 'coconut');
   b.enemy('hipopotamo', 90, 13);
   b.block(95, 12, 2, 2); b.block(97, 10, 2, 4);
   // acantilado secreto con una vida extra
@@ -317,6 +341,10 @@ function buildBeach() {
   b.enemy('mosquito', 160, 7);
   b.ground(164, 168, 12);
   b.arc(163, 10, 7);
+  // roca alta: espera a que salga el géiser y te subirá
+  b.spring(170, 13, 'geyser');
+  b.block(171, 6, 2, 8);
+  b.coins(171, 5, 2);
   b.enemy('hipopotamo', 174, 13);
   b.enemy('escorpion', 180, 13);
   b.checkpoint(186);
@@ -331,6 +359,7 @@ function buildBeach() {
 //  MUNDO 5 · El mundo de hielo (¡el suelo resbala!)
 //  Animales: lobo, oso polar, murciélago, araña
 //  Arma: espada de fuego · Armadura: hielo · Vida extra en el iceberg
+//  Pruebas especiales: ventisca que empuja a rachas y carámbanos que caen
 // ------------------------------------------------------------
 function buildIce() {
   const b = new LevelBuilder(228, 'ice');
@@ -361,6 +390,8 @@ function buildIce() {
   b.falling(82, 11, 2); b.falling(85, 12, 2);
   b.coins(76, 9, 12);
   b.ground(89, 140);
+  // ventisca: el viento sopla a rachas hacia atrás
+  b.wind(89, 0, 111, 13, -1.3, 0, 240);
   b.enemy('osoPolar', 95, 13);
   b.enemy('arana', 100, 5, { floorRow: 14 });
   b.item('armor:hielo', 104, 12);
@@ -377,6 +408,8 @@ function buildIce() {
   b.moving(141, 11, 148, 11, 3, 0.015);
   b.coins(142, 9, 9);
   b.ground(153, 227);
+  // carámbanos: ¡caen cuando pasas debajo!
+  b.dropper(157, 7, 'icicle'); b.dropper(163, 7, 'icicle'); b.dropper(169, 7, 'icicle');
   b.enemy('lobo', 160, 13);
   b.enemy('murcielago', 166, 8);
   b.enemy('osoPolar', 172, 13);
@@ -394,6 +427,7 @@ function buildIce() {
 //  Animales: monstruitos de fuego, murciélago, rinoceronte, araña,
 //            tigre, guepardo
 //  Objeto: escudo (al principio) · Armadura: dorada · Vida extra en la roca
+//  Pruebas especiales: rocas que caen y aire caliente que te eleva sobre la lava
 // ------------------------------------------------------------
 function buildVolcano() {
   const b = new LevelBuilder(228, 'volcano');
@@ -432,12 +466,14 @@ function buildVolcano() {
   b.enemy('monstruitoFuego', 120, 13);
   b.checkpoint(124);
   b.crusher(128, 4); b.crusher(132, 4);
+  b.dropper(136, 5, 'rock'); b.dropper(141, 5, 'rock');
   b.enemy('guepardo', 138, 13);
   b.jet(144, 14, 30);
   b.enemy('murcielago', 147, 8);
 
+  // aire caliente: déjate llevar hacia arriba para cruzar la lava
   b.liquid(151, 164);
-  b.moving(151, 12, 160, 12, 2, 0.02);
+  b.wind(151, 3, 164, 14, 0, -1.0);
   b.coins(152, 10, 10);
   b.ground(165, 227);
   b.enemy('rinoceronte', 172, 13);
@@ -448,6 +484,117 @@ function buildVolcano() {
   b.arena(196);
   b.block(226, 0, 2, 14);
   b.boss('llamarada', 214);
+  return b.build();
+}
+
+// ------------------------------------------------------------
+//  MUNDO 7 · El infierno (parte 1): el descenso
+//  Un nivel alto: se baja por escalones de roca, un pozo con
+//  barras de fuego y un lago de lava hasta la puerta del infierno.
+// ------------------------------------------------------------
+function buildHellDescent() {
+  const b = new LevelBuilder(112, 'hell', 62);
+  b.start = { x: 2, y: 7 };
+  b.ground(0, 16, 8);
+  b.arc(6, 6, 5);
+  b.enemy('murcielago', 14, 4);
+
+  b.ground(17, 30, 15);
+  b.coins(18, 13, 3);
+  b.enemy('diablillo', 25, 14);
+  b.enemy('murcielago', 28, 11);
+
+  b.ground(31, 44, 22);
+  b.arc(32, 20, 4);
+  b.firebar(38, 18, 5, 0.045);
+  b.checkpoint(42, 21);
+
+  b.ground(45, 58, 30);
+  b.spikes(49, 53, 29);
+  b.plat(49, 26, 5); b.coins(49, 25, 5);
+  b.enemy('monstruitoFuego', 56, 29);
+
+  // pozo profundo con una barra de fuego (abajo hay un túnel)
+  b.block(63, 30, 2, 13);
+  b.ground(59, 80, 46);
+  b.firebar(61, 37, 3, 0.05);
+  b.coins(60, 33, 2); b.coins(60, 41, 2);
+  b.arc(68, 40, 6);
+  b.checkpoint(66, 45);
+  b.enemy('diablillo', 71, 45);
+  b.jet(74, 46, 0);
+  b.enemy('diablillo', 78, 45);
+
+  // lago de lava con plataformas mágicas
+  b.ground(81, 85, 58);
+  b.liquid(86, 91, 59);
+  b.blink(87, 56, 2, 0); b.blink(90, 55, 2, 110);
+  b.ground(92, 111, 58);
+  b.item('heart', 96, 56);
+  b.exitAt(104, 55, 3, 3);
+  b.block(110, 0, 2, 58);
+  return b.build();
+}
+
+// ------------------------------------------------------------
+//  MUNDO 7 · El infierno (parte 2)
+//  Diablillos, mosquitos, monstruitos y murciélagos
+//  Arma: espada láser (¡vuela!) · Objetos: escudo de los monstruos y poción de la vida
+//  Pruebas nuevas: plataformas mágicas, gran lago de lava (hay que volar),
+//  lluvia de meteoritos y, al final, ¡los 6 monstruos finales uno tras otro!
+// ------------------------------------------------------------
+function buildHell() {
+  const b = new LevelBuilder(204, 'hell');
+  b.ground(0, 30);
+  // cueva de techo bajo: es imposible pasar sin coger la espada láser
+  b.block(6, 0, 5, 11);
+  b.item('weapon:espadaLaser', 8, 12);
+  b.arc(12, 11, 5);
+  b.item('pocion', 20, 12);  // poción antimosquitos
+  b.enemy('diablillo', 26, 13);
+
+  // plataformas mágicas que aparecen y desaparecen
+  b.liquid(31, 42);
+  b.blink(32, 12, 2, 0); b.blink(35, 11, 2, 60); b.blink(38, 12, 2, 120);
+  b.coins(32, 9, 8);
+  b.ground(43, 70);
+  b.firebar(50, 11, 4, 0.045);
+  b.enemy('diablillo', 55, 13);
+  b.firebar(60, 11, 4, -0.05);
+  b.enemy('mosquito', 64, 8);
+  b.checkpoint(67);
+
+  // gran lago de lava: ¡vuela con la espada láser! (islote para descansar)
+  b.liquid(71, 92);
+  b.ground(81, 82, 11);
+  b.arc(73, 8, 7); b.arc(84, 8, 7);
+  b.enemy('murcielago', 87, 6);
+  b.ground(93, 132);
+
+  // lluvia de meteoritos
+  b.dropper(100, 0, 'meteor'); b.dropper(106, 0, 'meteor'); b.dropper(112, 0, 'meteor'); b.dropper(118, 0, 'meteor');
+  b.enemy('dragoncito', 104, 6);
+  b.enemy('diablillo', 115, 13);
+  b.jet(122, 14, 0); b.jet(125, 14, 70);
+  b.checkpoint(128);
+
+  // todo mezclado antes de los monstruos
+  b.liquid(133, 140);
+  b.blink(134, 12, 2, 0); b.blink(137, 11, 2, 120);
+  b.ground(141, 203);
+  b.spikes(146, 148);
+  b.firebar(147, 9, 4, 0.05);
+  b.enemy('diablillo', 152, 13);
+  b.enemy('mosquito', 156, 7);
+  b.enemy('caballerito', 160, 13);
+  b.item('escudoJefe', 164, 12);
+  b.item('heart', 166, 12);
+  b.checkpoint(168);
+
+  // arena: los 6 monstruos finales, uno detrás de otro
+  b.arena(172);
+  b.block(202, 0, 2, 14);
+  b.boss('rush', 194);
   return b.build();
 }
 
@@ -463,5 +610,8 @@ const WORLDS = [
   { name: 'Mundo 5: El Mundo de Hielo', short: 'Mundo 5', build: buildIce, song: 'ice', boss: 'iceKill',
     tip: '¡El hielo resbala! La espada de fuego hace mucho daño a los monstruos de hielo.' },
   { name: 'Mundo 6: El Volcán', short: 'Mundo 6', build: buildVolcano, song: 'volcano', boss: 'llamarada',
-    tip: 'Coge el escudo: te protege de las bombas y puedes andar sobre la lava.' },
+    tip: 'Coge el escudo: te protege de las bombas y puedes andar sobre la lava.', ending: 'rescue' },
+  { name: 'Mundo 7: El Infierno', short: 'Mundo 7', build: buildHellDescent, build2: buildHell, song: 'hell', boss: null,
+    bossRush: ['heavyMetal', 'dobleDragon', 'caballeroOscuro', 'witchSand', 'iceKill', 'llamarada'], ending: 'cure',
+    tip: 'Baja al infierno. Con la espada láser puedes volar: ¡mantén pulsado el salto en el aire!' },
 ];

@@ -1,9 +1,9 @@
 'use strict';
 // ============================================================
-//  Gráficos de los mundos 4-6, objetos nuevos y escena final
+//  Gráficos de los mundos 4-7, objetos nuevos, obstáculos especiales y escenas finales
 //  (amplía el objeto Art definido en art.js)
 // ============================================================
-const EXTRA_THEMES = new Set(['beach', 'ice', 'volcano']);
+const EXTRA_THEMES = new Set(['beach', 'ice', 'volcano', 'hell']);
 
 Object.assign(TILESET, {
   beach: {
@@ -20,6 +20,11 @@ Object.assign(TILESET, {
     ground: '#3b302f', groundTop: '#55443f', groundDark: '#2a2120', crack: '#ff6a1a',
     block: '#2a2230', blockDark: '#1a141f',
     plat: '#4a3a3a', platDark: '#2a2120', spike: '#1a141f', liquid: '#ff6a1a',
+  },
+  hell: {
+    ground: '#4a1418', groundTop: '#7a2024', groundDark: '#2e0c10', crack: '#ff3b1a',
+    block: '#2a1020', blockDark: '#170810',
+    plat: '#3a2a30', platDark: '#1c1216', spike: '#e8dccb', liquid: '#ff3d14',
   },
 });
 
@@ -184,6 +189,19 @@ Object.assign(Art, {
         ctx.fillStyle = '#dff3ff'; ctx.fillRect(x, y + 2, TILE, 2);
         if (tileAt(level, c, r + 1) === T.EMPTY) for (let i = 0; i < 3; i++) this.poly(ctx, [x + 4 + i * 10, y + TILE, x + 8 + i * 10, y + TILE + 10, x + 12 + i * 10, y + TILE], '#d9f3ff');
       }
+    } else if (th === 'hell') {
+      // infierno: roca roja con venas de fuego y algún huesecillo
+      ctx.strokeStyle = ts.crack; ctx.lineWidth = 1.5;
+      if (this.hash(c * 7 + r * 5) > 0.5) {
+        ctx.beginPath(); ctx.moveTo(x + 2, y + 6 + this.hash(c + r) * 18); ctx.lineTo(x + 16, y + 14); ctx.lineTo(x + 30, y + 10 + this.hash(c * 3) * 16); ctx.stroke();
+      }
+      if (this.hash(c * 11 + r * 13) > 0.92) { this.line(ctx, x + 8, y + 20, x + 22, y + 24, '#e8dccb', 3); this.circle(ctx, x + 8, y + 20, 3, '#e8dccb'); this.circle(ctx, x + 22, y + 24, 3, '#e8dccb'); }
+      ctx.fillStyle = ts.groundDark; ctx.fillRect(x, y + TILE - 2, TILE, 2);
+      if (top) {
+        ctx.fillStyle = ts.groundTop; ctx.fillRect(x, y, TILE, 8);
+        for (let i = 0; i < 4; i++) this.poly(ctx, [x + i * 8, y + 8, x + i * 8 + 4, y + 13, x + i * 8 + 8, y + 8], ts.groundTop);
+        ctx.fillStyle = 'rgba(255,90,40,0.75)'; ctx.fillRect(x, y, TILE, 2);
+      }
     } else {
       // volcán: basalto con grietas de lava
       ctx.strokeStyle = ts.crack; ctx.lineWidth = 2;
@@ -215,6 +233,12 @@ Object.assign(Art, {
       ctx.strokeStyle = ts.blockDark; ctx.lineWidth = 2; this.rr(ctx, x + 1, y + 1, TILE - 2, TILE - 2, 4); ctx.stroke();
       this.poly(ctx, [x + 5, y + 5, x + 14, y + 5, x + 5, y + 14], 'rgba(255,255,255,0.8)');
       this.line(ctx, x + 18, y + 24, x + 26, y + 16, 'rgba(255,255,255,0.6)', 1.5);
+    } else if (th === 'hell') {
+      // ladrillos de obsidiana con juntas que brillan
+      ctx.fillStyle = ts.block; ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = 'rgba(255,60,30,0.55)';
+      ctx.fillRect(x, y + 15, TILE, 2); ctx.fillRect(x + (r % 2 ? 6 : 22), y, 2, 15); ctx.fillRect(x + (r % 2 ? 22 : 6), y + 17, 2, 15);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x + 2, y + 2, 10, 3);
     } else {
       ctx.fillStyle = ts.block; ctx.fillRect(x, y, TILE, TILE);
       this.poly(ctx, [x + 3, y + 3, x + 16, y + 6, x + 8, y + 18], '#3d3048');
@@ -234,6 +258,10 @@ Object.assign(Art, {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y + 2, TILE - 4, 2);
       this.poly(ctx, [x + 6, y + 10, x + 9, y + 20, x + 12, y + 10], ts.platDark);
       this.poly(ctx, [x + 20, y + 10, x + 22, y + 16, x + 25, y + 10], ts.platDark);
+    } else if (theme === 'hell') {
+      this.box(ctx, x, y, TILE, 11, 3, ts.plat);
+      ctx.fillStyle = ts.platDark; ctx.fillRect(x, y + 8, TILE, 3);
+      this.circle(ctx, x + 6, y + 5, 2, '#ff5a3a'); this.circle(ctx, x + 26, y + 5, 2, '#ff5a3a');
     } else {
       this.box(ctx, x, y, TILE, 11, 3, ts.plat);
       ctx.fillStyle = 'rgba(255,110,30,0.7)'; ctx.fillRect(x + 2, y + 11, TILE - 4, 2);
@@ -563,6 +591,15 @@ Object.assign(Art, {
         ctx.restore();
         break;
       }
+      case 'laser': {
+        const d = Math.sign(p.vx || 1);
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(d, 1);
+        this.box(ctx, -24, -6, 48, 12, 6, 'rgba(255,77,210,0.4)');
+        this.box(ctx, -22, -3, 44, 6, 3, '#ff4dd2');
+        this.box(ctx, -20, -1, 40, 2, 1, '#ffffff');
+        ctx.restore();
+        break;
+      }
       case 'iceRay': {
         // rayo de hielo: haz brillante con punta de cristal
         const d = Math.sign(p.vx || 1);
@@ -685,11 +722,13 @@ Object.assign(Art, {
   },
 
   // Papá (con barba) o mamá (pelirroja con gafas). Origen: pies. Miran a la izquierda.
-  parent(ctx, x, footY, kind, f, happy, walking) {
+  // fall 0..1: se cae hasta quedar tumbado en el suelo (con los ojos cerrados)
+  parent(ctx, x, footY, kind, f, happy, walking, fall = 0) {
     const dad = kind === 'dad';
     const s = 1.15;
     ctx.save();
     ctx.translate(x, footY);
+    if (fall > 0) { ctx.translate(0, -16 * fall); ctx.rotate(-fall * Math.PI / 2); }
     ctx.scale(-s, s);
     const sw = walking ? Math.sin(f * 0.3) * 5 : 0;
     const skin = '#f3c99d';
@@ -719,7 +758,8 @@ Object.assign(Art, {
     }
     this.circle(ctx, 0, hy, 14, skin);
     // ojos y boca
-    this.circle(ctx, -5, hy - 2, 1.8, '#222'); this.circle(ctx, 5, hy - 2, 1.8, '#222');
+    if (fall > 0.5) { this.line(ctx, -7, hy - 2, -3, hy - 2, '#222', 1.6); this.line(ctx, 3, hy - 2, 7, hy - 2, '#222', 1.6); }
+    else { this.circle(ctx, -5, hy - 2, 1.8, '#222'); this.circle(ctx, 5, hy - 2, 1.8, '#222'); }
     if (dad) {
       // pelo corto y gran barba
       ctx.fillStyle = '#5a3a1e';
@@ -750,7 +790,7 @@ Object.assign(Art, {
       if (happy) ctx.arc(0, hy + 4, 4, 0.2, Math.PI - 0.2); else ctx.arc(0, hy + 9, 3.5, Math.PI + 0.3, -0.3);
       ctx.stroke();
     }
-    if (!happy && !walking) {
+    if (!happy && !walking && fall === 0) {
       // lagrimita
       this.ellipse(ctx, 7, hy + 4 + (f % 40) * 0.3, 1.5, 2.5, '#7cc8ff');
     }
@@ -764,5 +804,238 @@ Object.assign(Art, {
     this.poly(ctx, [x - 8, y + 16, x + 4, y + 16, x - 2, y + 30], '#ffffff');
     ctx.fillStyle = '#1b1030'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(str, x, y);
+  },
+});
+
+// ============================================================
+//  Mundo 7 (infierno), obstáculos especiales y objetos nuevos
+// ============================================================
+Object.assign(Art, {
+  bgHell(ctx, camX, f, camY) {
+    ctx.fillStyle = this.grad(ctx, 'hell', ['#12030a', 0, '#3a0812', 0.45, '#8a1a12', 0.85, '#ff5a1a', 1]);
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    // cuanto más bajas, más rojo
+    if (camY > 0) { ctx.fillStyle = `rgba(255,60,20,${Math.min(0.25, camY / 6000)})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
+    // agujas de roca lejanas
+    const off = camX * 0.12, sp = 180, oy = -camY * 0.08;
+    for (let i = Math.floor(off / sp) - 1; i < Math.floor(off / sp) + 8; i++) {
+      const x = i * sp - off, h = 160 + this.hash(i) * 200, by = VIEW_H + 40 + oy + 120;
+      this.poly(ctx, [x - 50, by, x - 10, by - h, x + 6, by - h - 20, x + 50, by], '#2a0a10');
+      this.circle(ctx, x - 2, by - h + 30, 4, `rgba(255,200,60,${0.5 + 0.4 * Math.sin(f * 0.1 + i)})`);
+    }
+    // llamas al fondo
+    const off2 = camX * 0.3;
+    for (let i = Math.floor(off2 / 70) - 1; i < Math.floor(off2 / 70) + 16; i++) {
+      const x = i * 70 - off2, h = 50 + this.hash(i * 2) * 50 + Math.sin(f * 0.15 + i) * 12, by = VIEW_H;
+      this.poly(ctx, [x - 30, by, x, by - h, x + 30, by], 'rgba(255,90,20,0.35)');
+      this.poly(ctx, [x - 15, by, x, by - h * 0.6, x + 15, by], 'rgba(255,200,60,0.35)');
+    }
+    // chispas que suben
+    for (let i = 0; i < 46; i++) {
+      const x = ((this.hash(i) * VIEW_W + Math.sin(f * 0.03 + i) * 15 - camX * 0.5) % VIEW_W + VIEW_W) % VIEW_W;
+      const y = (((VIEW_H - (this.hash(i * 2.3) * VIEW_H + f * (0.6 + this.hash(i * 5.1)))) + camY * 0.4) % VIEW_H + VIEW_H) % VIEW_H;
+      this.circle(ctx, x, y, 1.5 + this.hash(i * 3) * 1.5, `rgba(255,${120 + Math.floor(this.hash(i) * 100)},50,0.85)`);
+    }
+  },
+
+  // Puerta del infierno (final del descenso)
+  hellGate(ctx, ex, f) {
+    const cx = ex.x + ex.w / 2, by = ex.y + ex.h;
+    this.box(ctx, ex.x - 22, ex.y - 30, ex.w + 44, ex.h + 30, 40, '#1a0608');
+    this.box(ctx, ex.x - 10, ex.y - 18, ex.w + 20, ex.h + 18, 34, `rgba(255,${60 + Math.floor(40 * Math.sin(f * 0.1))},20,0.9)`);
+    for (let i = 0; i < 4; i++) {
+      ctx.strokeStyle = i % 2 ? 'rgba(255,220,80,0.8)' : 'rgba(120,0,20,0.8)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(cx, by - ex.h / 2 - 6, 34 - i * 8, 48 - i * 10, 0, f * 0.08 + i, f * 0.08 + i + Math.PI * 1.3); ctx.stroke();
+    }
+    for (const s of [-1, 1]) {
+      const x = cx + s * (ex.w / 2 + 26);
+      this.box(ctx, x - 6, by - 50, 12, 50, 3, '#3a1010');
+      const fl = Math.sin(f * 0.3 + s) * 4;
+      this.poly(ctx, [x - 9, by - 50, x, by - 76 + fl, x + 9, by - 50], '#ff7b1c');
+      this.poly(ctx, [x - 4, by - 50, x, by - 66 + fl, x + 4, by - 50], '#ffe14d');
+    }
+    this.text(ctx, '¡INFIERNO!', cx, ex.y - 44, 16, '#ffe14d', 'center', '#3a0a0a');
+  },
+
+  // Plataforma mágica: brilla, parpadea y desaparece
+  blinkPlat(ctx, pl, f) {
+    if (pl.state === 'gone') {
+      ctx.strokeStyle = 'rgba(200,120,255,0.35)'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+      this.rr(ctx, pl.x, pl.y, pl.w, pl.h, 6); ctx.stroke(); ctx.setLineDash([]);
+      return;
+    }
+    if (pl.state === 'warn' && Math.floor(f / 5) % 2) ctx.globalAlpha = 0.35;
+    this.box(ctx, pl.x - 3, pl.y - 3, pl.w + 6, pl.h + 6, 9, 'rgba(200,120,255,0.3)');
+    this.box(ctx, pl.x, pl.y, pl.w, pl.h, 6, '#8a3fd1');
+    ctx.fillStyle = '#e2c4ff';
+    for (let i = 10; i < pl.w - 6; i += 16) { this.poly(ctx, [pl.x + i, pl.y + 4, pl.x + i + 4, pl.y + 8, pl.x + i, pl.y + 12, pl.x + i - 4, pl.y + 8], '#e2c4ff'); }
+    ctx.globalAlpha = 1;
+  },
+
+  // Trampolín, seta saltarina o géiser
+  spring(ctx, s, f) {
+    const k = s.squash > 0 ? Math.sin(s.squash / 12 * Math.PI) : 0;
+    const x = s.x, w = s.w, by = s.baseY;
+    if (s.style === 'trampoline') {
+      this.line(ctx, x + 4, by, x + 8, by - 10 + k * 5, '#555', 3);
+      this.line(ctx, x + w - 4, by, x + w - 8, by - 10 + k * 5, '#555', 3);
+      ctx.strokeStyle = '#999'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let i = 0; i < 4; i++) { ctx.moveTo(x + 8, by - 3 - i * 3 + k * 2); ctx.lineTo(x + w - 8, by - 4 - i * 3 + k * 2); }
+      ctx.stroke();
+      this.box(ctx, x - 2, by - 18 + k * 8, w + 4, 8, 4, '#e63946');
+      for (let i = 0; i < 3; i++) this.box(ctx, x + 2 + i * 10, by - 18 + k * 8, 5, 8, 2, '#ffffff');
+      this.text(ctx, '▲', x + w / 2, by - 30 + Math.sin(f * 0.15) * 3, 14, '#ffe14d');
+    } else if (s.style === 'mushroom') {
+      const sq = 1 - k * 0.3;
+      this.box(ctx, x + w / 2 - 6, by - 14, 12, 14, 4, '#f6e7c8');
+      ctx.save(); ctx.translate(x + w / 2, by - 12); ctx.scale(1 + k * 0.2, sq);
+      ctx.fillStyle = '#e8463a'; ctx.beginPath(); ctx.ellipse(0, 0, w / 2 + 8, 16, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+      this.circle(ctx, -9, -7, 3.5, '#fff'); this.circle(ctx, 6, -10, 3, '#fff'); this.circle(ctx, 13, -3, 2.5, '#fff');
+      ctx.restore();
+    } else {
+      // géiser: agujero en la arena; avisa con burbujas y luego sale el chorro
+      this.ellipse(ctx, x + w / 2, by - 2, w / 2 + 4, 6, '#a87d3e');
+      this.ellipse(ctx, x + w / 2, by - 2, w / 2 - 2, 3.5, '#2f6f9c');
+      if (s.warn) for (let i = 0; i < 3; i++) this.circle(ctx, x + w / 2 + (Math.random() - 0.5) * 16, by - 6 - Math.random() * 14, 2 + Math.random() * 2, 'rgba(230,248,255,0.8)');
+      if (s.active) {
+        const h = 5 * TILE * Math.min(1, (s.t % 200 - 120) / 10);
+        for (let y = by - 6; y > by - h; y -= 13) this.circle(ctx, x + w / 2 + Math.sin(y * 0.2 + f * 0.4) * 4, y, 13, 'rgba(200,240,255,0.85)');
+        this.circle(ctx, x + w / 2, by - h, 16, 'rgba(255,255,255,0.9)');
+      }
+    }
+  },
+
+  // Carámbanos, cocos, rocas y meteoritos
+  dropper(ctx, d, f) {
+    const cx = d.hx + d.w / 2;
+    if (d.style === 'coconut' && d.floorY) {
+      // palmera
+      ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.moveTo(cx - 10, d.floorY); ctx.quadraticCurveTo(cx - 18, d.hy + 60, cx, d.hy + 6); ctx.stroke();
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI + i * Math.PI / 4 + Math.sin(f * 0.03 + i) * 0.05;
+        ctx.strokeStyle = '#2f8f46'; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(cx, d.hy + 4); ctx.quadraticCurveTo(cx + Math.cos(a) * 30, d.hy - 14, cx + Math.cos(a) * 54, d.hy + 10 + Math.abs(Math.sin(a)) * 6); ctx.stroke();
+      }
+    } else if (d.style === 'icicle') {
+      this.box(ctx, cx - 18, d.hy - 10, 36, 12, 5, '#d9f3ff');
+    } else if (d.style === 'rock') {
+      this.poly(ctx, [cx - 22, d.hy - 4, cx + 22, d.hy - 4, cx + 12, d.hy + 8, cx - 10, d.hy + 10], '#3b302f');
+    }
+    if (d.state === 'gone') return;
+    // sombra/aviso en el suelo
+    if ((d.state === 'warn' || d.state === 'fall') && d.floorY) this.ellipse(ctx, cx, d.floorY - 2, d.w * 0.8, 5, `rgba(255,40,40,${0.25 + 0.2 * Math.sin(f * 0.5)})`);
+    const sx = d.state === 'warn' ? (Math.random() - 0.5) * 4 : 0;
+    const x = d.x + sx, y = d.y, mx = x + d.w / 2, my = y + d.h / 2;
+    switch (d.style) {
+      case 'icicle':
+        this.poly(ctx, [x, y, x + d.w, y, mx, y + d.h], '#d9f3ff');
+        this.poly(ctx, [x, y, mx, y, mx, y + d.h], '#ffffff');
+        break;
+      case 'coconut':
+        this.circle(ctx, mx, my, 11, '#6b4220'); this.circle(ctx, mx - 3, my - 3, 3, '#8a5a2b');
+        this.circle(ctx, mx + 2, my + 3, 1.5, '#3a2210'); this.circle(ctx, mx + 5, my, 1.5, '#3a2210');
+        break;
+      case 'rock':
+        this.poly(ctx, [x + 2, y + 6, x + 10, y, x + d.w - 2, y + 4, x + d.w, y + d.h - 6, x + 12, y + d.h, x, y + d.h - 8], '#6b5650');
+        this.line(ctx, x + 8, y + 8, x + 14, y + 14, '#ff6a1a', 2);
+        break;
+      case 'meteor':
+        if (d.state === 'idle') { this.circle(ctx, mx, y + 6, 6 + Math.sin(f * 0.2) * 2, 'rgba(255,140,40,0.6)'); break; }
+        this.circle(ctx, mx, my - 8, 16, 'rgba(255,120,30,0.4)');
+        this.circle(ctx, mx, my, 12, '#5a2a1a'); this.circle(ctx, mx - 3, my - 3, 6, '#ff7b1c'); this.circle(ctx, mx - 3, my - 3, 3, '#ffe14d');
+        break;
+    }
+  },
+
+  firebar(ctx, fb, f) {
+    this.box(ctx, fb.cx - 14, fb.cy - 14, 28, 28, 5, '#4e4b5a');
+    this.box(ctx, fb.cx - 10, fb.cy - 10, 20, 20, 4, '#6d6a7a');
+    for (const b of fb.balls()) {
+      this.circle(ctx, b.x, b.y, 10, 'rgba(255,120,30,0.45)');
+      this.circle(ctx, b.x, b.y, 7.5, '#ff7b1c');
+      this.circle(ctx, b.x, b.y, 4, '#ffe14d');
+    }
+    this.circle(ctx, fb.cx, fb.cy, 4, '#222');
+  },
+
+  // Viento: copos que vuelan (ventisca) o aire caliente que sube
+  wind(ctx, w, f) {
+    const up = w.fy < 0;
+    if (up) {
+      const g = ctx.createLinearGradient(0, w.y, 0, w.y + w.h);
+      g.addColorStop(0, 'rgba(255,160,60,0)'); g.addColorStop(1, 'rgba(255,160,60,0.22)');
+      ctx.fillStyle = g; ctx.fillRect(w.x, w.y, w.w, w.h);
+    }
+    const n = Math.floor(w.w * w.h / (up ? 2600 : 2200));
+    const strong = w.on;
+    for (let i = 0; i < n; i++) {
+      const hx = this.hash(i * 1.7), hy = this.hash(i * 3.1);
+      if (up) {
+        const x = w.x + hx * w.w + Math.sin(f * 0.05 + i) * 6;
+        const y = w.y + w.h - ((hy * w.h + f * (2 + hx * 2)) % w.h);
+        this.line(ctx, x, y, x, y + 14, 'rgba(255,220,150,0.5)', 2);
+      } else {
+        const sp = strong ? 6 + hy * 4 : 0.8;
+        const x = w.x + ((((hx * w.w + f * sp * Math.sign(w.fx || -1)) % w.w) + w.w) % w.w);
+        const y = w.y + hy * w.h + Math.sin(f * 0.07 + i) * 8;
+        if (strong) this.line(ctx, x, y, x - Math.sign(w.fx) * 16, y, 'rgba(255,255,255,0.75)', 2);
+        else this.circle(ctx, x, y, 1.6, 'rgba(255,255,255,0.6)');
+      }
+    }
+  },
+
+  laserSword(ctx, t) {
+    ctx.fillStyle = '#4a4f57'; ctx.fillRect(-9, -2.5, 11, 5);
+    ctx.fillStyle = '#9aa3ad'; ctx.fillRect(-1, -4.5, 4, 9);
+    const fl = 1 + Math.sin(t * 0.5) * 0.08;
+    this.box(ctx, 3, -5 * fl, 46, 10 * fl, 5, 'rgba(255,77,210,0.45)');
+    this.box(ctx, 3, -3, 44, 6, 3, '#ff4dd2');
+    this.box(ctx, 4, -1.2, 42, 2.4, 1, '#ffffff');
+  },
+
+  // Diablillo: rojo, con cuernos, cola y tridente
+  imp(ctx, e) {
+    const t = e.t, h = e.h, st = Math.abs(e.vx) > 0.1 ? Math.sin(t * 0.4) * 3 : 0;
+    ctx.strokeStyle = '#b3121f'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-8, -12); ctx.quadraticCurveTo(-24, -10 + Math.sin(t * 0.15) * 4, -20, -26); ctx.stroke();
+    this.poly(ctx, [-24, -26, -16, -28, -20, -34], '#b3121f');
+    this.box(ctx, -8 + st * 0.3, -12, 6, 12, 2, '#9c0f1b'); this.box(ctx, 2 - st * 0.3, -12, 6, 12, 2, '#9c0f1b');
+    this.ellipse(ctx, 0, -20, 11, 11, '#d9202e');
+    this.circle(ctx, 2, -h + 11, 10, '#e02a38');
+    this.poly(ctx, [-5, -h + 4, -9, -h - 6, -1, -h + 2], '#f5e6c8'); this.poly(ctx, [6, -h + 2, 10, -h - 6, 11, -h + 5], '#f5e6c8');
+    this.circle(ctx, 1, -h + 10, 2.8, '#ffe14d'); this.circle(ctx, 7, -h + 10, 2.8, '#ffe14d');
+    this.circle(ctx, 1.6, -h + 10, 1.2, '#111'); this.circle(ctx, 7.6, -h + 10, 1.2, '#111');
+    ctx.strokeStyle = '#5a0a10'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(4, -h + 14, 4, 0.2, Math.PI - 0.2); ctx.stroke();
+    // tridente
+    this.line(ctx, 12, -4, 16, -h - 4, '#7a6a5a', 2.5);
+    ctx.strokeStyle = '#c0c8d0'; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(11, -h - 2); ctx.lineTo(11, -h - 10); ctx.moveTo(16, -h - 4); ctx.lineTo(16.5, -h - 13); ctx.moveTo(21, -h - 2); ctx.lineTo(21, -h - 10);
+    ctx.moveTo(11, -h - 2); ctx.lineTo(21, -h - 2); ctx.stroke();
+  },
+
+  // Escudo de los monstruos finales
+  bossShield(ctx, cx, cy, r) {
+    ctx.fillStyle = '#f5c518'; ctx.beginPath();
+    ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy - r); ctx.lineTo(cx + r, cy);
+    ctx.quadraticCurveTo(cx + r, cy + r * 0.9, cx, cy + r * 1.3); ctx.quadraticCurveTo(cx - r, cy + r * 0.9, cx - r, cy); ctx.closePath(); ctx.fill();
+    const k = 0.78;
+    ctx.fillStyle = '#7d5fd6'; ctx.beginPath();
+    ctx.moveTo(cx - r * k, cy - r * k); ctx.lineTo(cx + r * k, cy - r * k); ctx.lineTo(cx + r * k, cy);
+    ctx.quadraticCurveTo(cx + r * k, cy + r * 0.75, cx, cy + r * 1.05); ctx.quadraticCurveTo(cx - r * k, cy + r * 0.75, cx - r * k, cy); ctx.closePath(); ctx.fill();
+    const pts = [];
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.22 : r * 0.5; pts.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+    this.poly(ctx, pts, '#ffe14d');
+  },
+
+  // Poción de la vida (para salvar a papá)
+  lifePotion(ctx, cx, cy, r) {
+    this.circle(ctx, cx, cy + r * 0.25, r * 1.2, 'rgba(255,107,139,0.25)');
+    this.box(ctx, cx - r * 0.25, cy - r * 1.05, r * 0.5, r * 0.5, 2, '#e8e0f0');
+    this.box(ctx, cx - r * 0.32, cy - r * 1.25, r * 0.64, r * 0.3, 2, '#8a5a2b');
+    this.circle(ctx, cx, cy + r * 0.25, r * 0.8, '#f0e8ff');
+    this.circle(ctx, cx, cy + r * 0.3, r * 0.66, '#ff3d6e');
+    this.heart(ctx, cx, cy + r * 0.25, r * 0.36, '#ffffff');
+    this.circle(ctx, cx - r * 0.35, cy, r * 0.14, 'rgba(255,255,255,0.8)');
   },
 });

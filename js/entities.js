@@ -35,6 +35,8 @@ class Player {
     this.bounced = false;
     this.flip = 0;
     this.regen = 0;
+    this.flyE = FLY.energy;
+    this.flying = false;
     this.dead = false;
     this.hearts = START_HEARTS;
     this.shield = this.maxShield();
@@ -102,6 +104,17 @@ class Player {
 
     // Gravedad + colisiones
     this.vy = Math.min(this.vy + PHYS.gravity, PHYS.maxFall);
+    // Vuelo con la espada láser: mantener el salto en el aire
+    this.flying = false;
+    if (this.inv.weapons.includes('espadaLaser')) {
+      if (this.onGround) this.flyE = Math.min(FLY.energy, this.flyE + FLY.recharge);
+      else if (Input.down('jump') && (this.jumpsLeft === 0 || this.vy > 0) && this.flyE > 0 && this.vy > -6) {
+        this.vy = Math.max(this.vy - FLY.lift, FLY.maxUp);
+        this.flyE--;
+        this.flying = true;
+        if (this.anim % 3 === 0) g.particles.push(new Particle(this.x + this.w / 2 - this.facing * 8, this.y + 30, (Math.random() - 0.5), 1.5, Math.random() < 0.5 ? '#ff4dd2' : '#7df9ff', 16, 4, 0));
+      }
+    }
     this.prevBottom = this.y + this.h;
     const baseVx = this.vx;
     this.vx += this.push;
@@ -109,6 +122,7 @@ class Player {
     this.lavaWalk = !!this.inv.escudo && LAVA_THEMES.has(g.level.theme);
     moveAndCollide(this, g.level, this.dropTimer > 0);
     if (!this.hitWall) this.vx = baseVx;
+    if (this.y < -12) { this.y = -12; this.vy = Math.max(this.vy, 0); } // techo del cielo
 
     // Ataque
     if (Input.pressed('attack') && this.attackCooldown === 0) this.attack(g);
@@ -141,11 +155,11 @@ class Player {
     } else {
       Sound.play('swing');
       if (W.shot) {
-        // espadas elementales: llamarada o rayo de hielo
+        // espadas especiales: llamarada, rayo de hielo o rayo láser
         const S = W.shot;
         g.projectiles.push(new Projectile(S.kind, this.x + this.w / 2 + this.facing * 30, this.y + 18, this.facing * S.speed, 0, 'player', S.dmg,
           { element: W.element, freeze: W.freeze, life: S.life }));
-        Sound.play(W.element === 'fire' ? 'fire' : 'ice');
+        Sound.play(W.element === 'fire' ? 'fire' : W.element === 'ice' ? 'ice' : 'laser');
       }
     }
   }
@@ -203,7 +217,7 @@ const PROJ_SIZE = {
   star: [16, 16], arrow: [26, 8], fire: [20, 20], ice: [18, 18], scrap: [18, 18], scrapIn: [18, 18],
   wave: [26, 22], swordwave: [22, 40], diamond: [22, 22], friendFire: [18, 18],
   tornado: [30, 56], snowball: [28, 28], bomb: [22, 22], icicle: [16, 30], iceball: [18, 18],
-  flame: [30, 24], iceRay: [40, 12],
+  flame: [30, 24], iceRay: [40, 12], laser: [44, 8],
 };
 // Proyectiles enemigos que no se pueden romper (hay que saltarlos)
 const UNBREAKABLE = new Set(['wave', 'swordwave', 'tornado']);
@@ -254,6 +268,9 @@ class Projectile {
     if (this.kind === 'flame' && this.t % 2 === 0) {
       g.particles.push(new Particle(cx - this.vx * 2, cy + (Math.random() - 0.5) * 14, -this.vx * 0.15, -0.5 - Math.random(),
         Math.random() < 0.5 ? '#ffb02e' : '#ff5a1f', 20, 5, -0.04));
+    } else if (this.kind === 'laser' && this.t % 2 === 0) {
+      g.particles.push(new Particle(cx - this.vx, cy + (Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 0.4,
+        Math.random() < 0.5 ? '#ff4dd2' : '#ffffff', 12, 3, 0));
     } else if (this.kind === 'iceRay' && this.t % 2 === 0) {
       g.particles.push(new Particle(cx - this.vx, cy + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 0.6,
         Math.random() < 0.5 ? '#bdefff' : '#ffffff', 18, 3, 0));
@@ -275,7 +292,7 @@ class Projectile {
       if (this.vy > 0 && isSolid(tileAt(g.level, col, row))) {
         this.dead = true;
         g.openPortal(cx, row * TILE);
-      } else if (this.y > VIEW_H) {
+      } else if (this.y > levelBottom(g.level)) {
         this.dead = true;
         g.hasDiamond = true;
       }
@@ -291,7 +308,7 @@ class Projectile {
         g.sparks(cx, cy, this.element === 'fire' ? '#ffb02e' : this.element === 'ice' ? '#bdefff' : '#ffffff', 5);
       }
     }
-    if (this.y > VIEW_H + 40 || this.x < g.camX - 300 || this.x > g.camX + VIEW_W + 300) this.dead = true;
+    if (this.y > levelBottom(g.level) + 40 || this.x < g.camX - 300 || this.x > g.camX + VIEW_W + 300) this.dead = true;
   }
 
   // Proyectiles que van por el suelo: bombas, bolas de nieve y tornados de arena
@@ -311,7 +328,7 @@ class Projectile {
         g.puff(cx, this.y + this.h / 2, this.kind === 'snowball' ? '#ffffff' : '#e8c88a', 12);
       }
     }
-    if (this.y > VIEW_H + 40) this.dead = true;
+    if (this.y > levelBottom(g.level) + 40) this.dead = true;
   }
 }
 
@@ -347,8 +364,8 @@ class Item {
       this.vy = Math.min(this.vy + 0.4, 10);
       moveAndCollide(this, g.level);
       this.vx *= 0.96;
-      if (this.y > VIEW_H + 40) {
-        if (this.kind === 'diamond') { this.y = 40; this.vy = 0; this.x = g.camX + VIEW_W / 2; }
+      if (this.y > levelBottom(g.level) + 40) {
+        if (this.kind === 'diamond' || this.kind === 'pocionVida') { this.y = 40; this.vy = 0; this.x = g.camX + VIEW_W / 2; }
         else this.dead = true;
       }
     }
@@ -416,14 +433,14 @@ class FallingPlatform {
     this.solid = true;
   }
   onStand() { if (this.state === 'idle') { this.state = 'shake'; this.timer = 36; } }
-  update() {
+  update(g) {
     this.dx = 0; this.dy = 0;
     if (this.state === 'shake') {
       if (--this.timer <= 0) { this.state = 'fall'; this.vy = 0; }
     } else if (this.state === 'fall') {
       this.vy = Math.min(this.vy + 0.35, 9);
       this.y += this.vy; this.dy = this.vy;
-      if (this.y > VIEW_H + 60) { this.state = 'gone'; this.timer = 200; this.solid = false; }
+      if (this.y > levelBottom(g.level) + 60) { this.state = 'gone'; this.timer = 200; this.solid = false; }
     } else if (this.state === 'gone') {
       if (--this.timer <= 0) { this.state = 'idle'; this.x = this.hx; this.y = this.hy; this.solid = true; }
     }
@@ -465,7 +482,7 @@ class Crusher {
     this.w = 2 * TILE; this.h = 60;
     this.homeY = this.y;
     let row = ty + 2;
-    while (row < ROWS && !isSolid(tileAt(level, tx, row))) row++;
+    while (row < (level.rows || ROWS) && !isSolid(tileAt(level, tx, row))) row++;
     this.floorY = row * TILE - this.h;
     this.state = 'wait'; this.timer = 0; this.vy = 0;
   }
@@ -554,5 +571,153 @@ class Portal {
   box() {
     const s = Math.min(1, this.t / 40);
     return { x: this.cx - 22 * s, y: this.groundY - this.h * s, w: 44 * s, h: this.h * s };
+  }
+}
+
+// ------------------------------------------------------------
+//  Trampolín, seta saltarina o géiser: te lanzan muy alto
+//  style: 'trampoline' | 'mushroom' | 'geyser' (el géiser sale a ratos)
+// ------------------------------------------------------------
+class Spring {
+  constructor(tx, row, style = 'trampoline', phase = 0) {
+    this.x = tx * TILE + 2; this.w = TILE - 4;
+    this.baseY = (row + 1) * TILE; // superficie en la que se apoya
+    this.h = 18; this.y = this.baseY - this.h;
+    this.style = style;
+    this.t = phase;
+    this.squash = 0; this.cool = 0;
+  }
+  get active() { return this.style !== 'geyser' || this.t % 200 >= 120; }
+  get warn() { return this.style === 'geyser' && this.t % 200 >= 85 && this.t % 200 < 120; }
+  update(g) {
+    this.t++;
+    if (this.squash > 0) this.squash--;
+    if (this.cool > 0) this.cool--;
+    if (!this.active) return;
+    const zone = this.style === 'geyser'
+      ? { x: this.x, y: this.baseY - 5 * TILE, w: this.w, h: 5 * TILE }
+      : { x: this.x, y: this.y, w: this.w, h: this.h };
+    const p = g.player;
+    const feet = { x: p.x + 4, y: p.y + p.h - 10, w: p.w - 8, h: 12 };
+    if (this.cool === 0 && p.vy >= 0 && !p.dead && overlap(feet, zone)) {
+      p.vy = Input.down('jump') ? -19.5 : -18;
+      p.bounced = true; p.jumpsLeft = 1; p.onGround = false; p.riding = null; p.coyote = 0;
+      this.squash = 12; this.cool = 10;
+      Sound.play('spring');
+      if (this.style === 'geyser') g.puff(p.x + p.w / 2, p.y + p.h, '#e6f8ff', 10);
+    }
+  }
+}
+
+// ------------------------------------------------------------
+//  Cosas que caen cuando pasas debajo:
+//  carámbanos, cocos, rocas y meteoritos (vuelven a salir)
+// ------------------------------------------------------------
+class Dropper {
+  constructor(tx, ty, style) {
+    this.style = style; // 'icicle' | 'coconut' | 'rock' | 'meteor'
+    this.w = style === 'icicle' ? 16 : 24; this.h = style === 'icicle' ? 30 : 24;
+    this.hx = tx * TILE + TILE / 2 - this.w / 2; this.hy = ty * TILE;
+    this.x = this.hx; this.y = this.hy;
+    this.state = 'idle'; this.timer = 0; this.vy = 0; this.t = 0;
+    this.floorY = null;
+  }
+  update(g) {
+    this.t++;
+    const L = g.level, p = g.player, cx = this.x + this.w / 2;
+    if (this.floorY == null) {
+      let row = Math.floor((this.hy + this.h) / TILE);
+      while (row < (L.rows || ROWS) && !isSolid(tileAt(L, Math.floor(cx / TILE), row)) && tileAt(L, Math.floor(cx / TILE), row) !== T.LIQUID) row++;
+      this.floorY = row * TILE;
+    }
+    switch (this.state) {
+      case 'idle':
+        if (Math.abs(p.x + p.w / 2 - cx) < 70 && p.y > this.y) { this.state = 'warn'; this.timer = 28; }
+        break;
+      case 'warn':
+        if (--this.timer <= 0) { this.state = 'fall'; this.vy = 0; }
+        break;
+      case 'fall': {
+        this.vy = Math.min(this.vy + 0.5, 11);
+        this.y += this.vy;
+        if (this.style === 'meteor' && this.t % 2 === 0) g.particles.push(new Particle(cx + (Math.random() - 0.5) * 10, this.y, (Math.random() - 0.5), -1, Math.random() < 0.5 ? '#ffb02e' : '#ff5a1f', 18, 5, -0.03));
+        if (overlap({ x: p.x + 3, y: p.y + 4, w: p.w - 6, h: p.h - 4 }, this)) p.hurt(g, 1, this.style === 'icicle' ? 'ice' : null, cx);
+        if (this.y + this.h >= this.floorY) {
+          this.state = 'gone'; this.timer = 150;
+          const col = { icicle: '#e6f8ff', coconut: '#8a5a2b', rock: '#6b5650', meteor: '#ffb02e' }[this.style];
+          g.sparks(cx, this.floorY - 4, col, 12);
+          if (Math.abs(cx - g.camX - VIEW_W / 2) < VIEW_W) Sound.play(this.style === 'icicle' ? 'ice' : 'thud');
+          if (this.style === 'meteor' || this.style === 'rock') g.shake = Math.max(g.shake, 4);
+        }
+        break;
+      }
+      case 'gone':
+        if (--this.timer <= 0) { this.state = 'idle'; this.x = this.hx; this.y = this.hy; this.vy = 0; }
+        break;
+    }
+  }
+}
+
+// ------------------------------------------------------------
+//  Barra de bolas de fuego que gira alrededor de un bloque
+// ------------------------------------------------------------
+class FireBar {
+  constructor(tx, ty, len, speed) {
+    this.cx = tx * TILE + TILE / 2; this.cy = ty * TILE + TILE / 2;
+    this.len = len; this.speed = speed;
+    this.a = 0;
+  }
+  balls() {
+    const out = [];
+    for (let i = 1; i <= this.len; i++) out.push({ x: this.cx + Math.cos(this.a) * i * 16, y: this.cy + Math.sin(this.a) * i * 16 });
+    return out;
+  }
+  update(g) {
+    this.a += this.speed;
+    const p = g.player, hb = { x: p.x + 4, y: p.y + 6, w: p.w - 8, h: p.h - 8 };
+    for (const b of this.balls()) {
+      const nx = clamp(b.x, hb.x, hb.x + hb.w), ny = clamp(b.y, hb.y, hb.y + hb.h);
+      if ((b.x - nx) ** 2 + (b.y - ny) ** 2 < 64) { p.hurt(g, 1, null, this.cx); break; }
+    }
+  }
+}
+
+// ------------------------------------------------------------
+//  Viento: ventisca que empuja (fx) o aire caliente que sube (fy).
+//  gust > 0: sopla a rachas (frames del ciclo)
+// ------------------------------------------------------------
+class Wind {
+  constructor(x0, y0, x1, y1, fx, fy, gust = 0) {
+    this.x = x0 * TILE; this.y = y0 * TILE;
+    this.w = (x1 - x0 + 1) * TILE; this.h = (y1 - y0 + 1) * TILE;
+    this.fx = fx; this.fy = fy; this.gust = gust;
+    this.t = 0;
+  }
+  get on() { return !this.gust || this.t % this.gust < this.gust * 0.55; }
+  update(g) {
+    this.t++;
+    const p = g.player;
+    if (!this.on || p.dead || !overlap(p, this)) return;
+    p.push += this.fx;
+    if (this.fy) { p.vy = Math.max(p.vy + this.fy, -5.5); p.jumpsLeft = 1; }
+  }
+}
+
+// ------------------------------------------------------------
+//  Plataforma mágica que aparece y desaparece (infierno)
+// ------------------------------------------------------------
+class BlinkPlatform {
+  constructor(x, y, wTiles, phase = 0) {
+    this.x = x; this.y = y;
+    this.w = wTiles * TILE; this.h = 16;
+    this.style = 'blink';
+    this.t = phase % 240;
+    this.dx = 0; this.dy = 0;
+    this.solid = true; this.state = 'on';
+  }
+  update() {
+    this.t = (this.t + 1) % 240;
+    this.state = this.t < 130 ? 'on' : this.t < 170 ? 'warn' : 'gone';
+    this.solid = this.state !== 'gone';
   }
 }

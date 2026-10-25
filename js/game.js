@@ -31,6 +31,7 @@ class Game {
     this.score = 0;
     this.coins = 0;
     this.particles = [];
+    this.camX = 0; this.camY = 0;
     this.state = 'title';
     Sound.playMusic('title');
   }
@@ -47,19 +48,25 @@ class Game {
   continueGame() {
     this.inv = cloneInv(this.save.inv);
     this.lives = START_LIVES; this.score = this.save.score || 0; this.coins = 0;
-    this.loadWorld(clamp(this.save.world, 0, WORLDS.length - 1));
+    const w = clamp(this.save.world, 0, WORLDS.length - 1);
+    this.loadWorld(w, WORLDS[w].build2 ? this.save.part || 0 : 0);
   }
 
-  loadWorld(i) {
+  // part = 1: segunda parte del mundo (en el infierno, tras el descenso).
+  // direct: entra jugando, sin la pantalla de presentación.
+  loadWorld(i, part = 0, direct = false) {
     this.worldIndex = i;
     this.world = WORLDS[i];
-    this.level = this.world.build();
+    this.part = part;
+    this.level = (part && this.world.build2 ? this.world.build2 : this.world.build)();
     this.startInv = cloneInv(this.inv);
     this.startScore = this.score;
     this.startCoins = this.coins;
     this.enemies = []; this.items = []; this.checkpoints = []; this.platforms = [];
     this.jets = []; this.crushers = []; this.friends = []; this.projectiles = []; this.particles = [];
+    this.springs = []; this.droppers = []; this.firebars = []; this.winds = [];
     this.portal = null; this.boss = null; this.bossSpawn = null;
+    this.rushIndex = 0; this.rushWait = 0;
     this.arenaActive = false; this.bossDone = false; this.bossHpSaved = null;
     this.hasDiamond = false;
     this.msg = null;
@@ -81,6 +88,11 @@ class Game {
         case 'jet': this.jets.push(new FireJet(s.x, s.row, L.theme, s.phase)); break;
         case 'crusher': this.crushers.push(new Crusher(s.x, s.y, L)); break;
         case 'friend': this.friends.push(new FriendDragon(s.x * TILE, s.y * TILE)); break;
+        case 'spring': this.springs.push(new Spring(s.x, s.row, s.style, s.phase)); break;
+        case 'dropper': this.droppers.push(new Dropper(s.x, s.y, s.style)); break;
+        case 'firebar': this.firebars.push(new FireBar(s.x, s.y, s.len, s.speed)); break;
+        case 'wind': this.winds.push(new Wind(s.x0, s.y0, s.x1, s.y1, s.fx, s.fy, s.gust)); break;
+        case 'blink': this.platforms.push(new BlinkPlatform(s.x * TILE, s.y * TILE, s.w, s.phase)); break;
         case 'boss': this.bossSpawn = s; break;
       }
     }
@@ -90,9 +102,20 @@ class Game {
     this.player = new Player(this.respawn.x, this.respawn.y, this.inv);
     this.player.onGround = true;
     this.snapCamera();
-    this.state = 'intro';
+    this.state = direct ? 'playing' : 'intro';
     this.timer = 0;
     Sound.playMusic(this.world.song);
+  }
+
+  // Al cruzar la puerta del final del descenso empieza la segunda parte
+  enterPart2() {
+    const p = this.player;
+    this.puff(p.x + p.w / 2, p.y + p.h / 2, '#ff6a1a', 20);
+    this.loadWorld(this.worldIndex, 1, true);
+    Sound.play('portal');
+    this.save = { world: this.worldIndex, part: 1, inv: cloneInv(this.inv), score: this.score };
+    writeSave(this.save);
+    this.say('¡Has llegado al infierno!', 'Busca la poción que salvará a papá');
   }
 
   restartWorld() {
@@ -100,7 +123,7 @@ class Game {
     this.lives = START_LIVES;
     this.score = this.startScore;
     this.coins = this.startCoins;
-    this.loadWorld(this.worldIndex);
+    this.loadWorld(this.worldIndex, this.part);
   }
 
   // ----------------------------------------------------------
@@ -137,8 +160,8 @@ class Game {
         if (this.portal) this.portal.update();
         if (this.timer % 12 === 0) this.firework(this.camX + 100 + Math.random() * (VIEW_W - 200), 60 + Math.random() * 200);
         if (this.timer > 260) {
-          if (this.worldIndex + 1 < WORLDS.length) this.loadWorld(this.worldIndex + 1);
-          else this.startEnding();
+          if (this.world.ending) this.startEnding(this.world.ending);
+          else this.loadWorld(this.worldIndex + 1);
         }
         break;
       case 'gameover':
@@ -157,6 +180,7 @@ class Game {
     // plataformas móviles (llevan al ninja encima)
     for (const pl of this.platforms) pl.update(this);
     if (p.riding && p.riding.solid) { p.x += p.riding.dx; p.y += p.riding.dy; }
+    for (const w of this.winds) w.update(this); // el viento empuja antes de moverse
 
     p.update(this);
     this.platformCollide(p);
@@ -186,7 +210,13 @@ class Game {
     for (const j of this.jets) j.update(this);
     for (const c of this.crushers) c.update(this);
     for (const f of this.friends) f.update(this);
+    for (const s of this.springs) s.update(this);
+    for (const d of this.droppers) d.update(this);
+    for (const fb of this.firebars) fb.update(this);
     if (this.state !== 'playing') return;
+
+    // puerta al final del descenso
+    if (L.exit && overlap(p, L.exit)) { this.enterPart2(); return; }
 
     const phb = { x: p.x + 3, y: p.y + 4, w: p.w - 6, h: p.h - 4 };
     const mb = p.meleeBox();
@@ -202,7 +232,7 @@ class Game {
     for (const e of this.enemies) {
       if (e.dead || !this.isActive(e)) continue;
       e.update(this);
-      if (e.y > VIEW_H + 60) { e.dead = true; continue; }
+      if (e.y > levelBottom(L) + 60) { e.dead = true; continue; }
       if (mb && e.lastHit !== p.attackId && overlap(mb, e)) {
         e.lastHit = p.attackId;
         this.weaponHit(e, W, p.x + p.w / 2);
@@ -237,7 +267,8 @@ class Game {
     }
     this.enemies = this.enemies.filter(e => !e.dead);
 
-    // ---- arena del jefe ----
+    // ---- arena del jefe (en el infierno salen los 6 jefes, uno tras otro) ----
+    if (this.rushWait > 0 && --this.rushWait === 0) this.startBoss();
     if (!this.arenaActive && !this.bossDone && L.arenaStart != null && p.x > (L.arenaStart + 2) * TILE) this.startBoss();
 
     // ---- jefe ----
@@ -262,10 +293,10 @@ class Game {
             this.bounce(p);
             p.vy = -11;
             Sound.play('stomp');
-          } else if (!b.harmless()) p.hurt(this, 1, b.kind === 'llamarada' ? 'fire' : null, b.cx);
+          } else if (!b.harmless()) this.bossHurtPlayer(1, b.kind === 'llamarada' ? 'fire' : null, b.cx);
         }
         const ab = b.attackBox();
-        if (ab && overlap(phb, ab)) p.hurt(this, 1, null, b.cx);
+        if (ab && overlap(phb, ab)) this.bossHurtPlayer(1, null, b.cx);
       }
       if (this.state !== 'playing') return;
     }
@@ -293,7 +324,8 @@ class Game {
           continue;
         }
         if (overlap(phb, pr) && p.invuln === 0) {
-          p.hurt(this, pr.dmg, pr.element, cx);
+          if (this.boss) this.bossHurtPlayer(pr.dmg, pr.element, cx);
+          else p.hurt(this, pr.dmg, pr.element, cx);
           if (!wave) pr.dead = true;
         }
       } else {
@@ -343,8 +375,12 @@ class Game {
     this.updateCamera();
   }
 
-  isActive(e) { return e.x + e.w > this.camX - 160 && e.x < this.camX + VIEW_W + 160; }
-  onScreen(e) { return e.x + e.w > this.camX - 20 && e.x < this.camX + VIEW_W + 20; }
+  isActive(e) {
+    return e.x + e.w > this.camX - 160 && e.x < this.camX + VIEW_W + 160 && e.y + e.h > this.camY - 220 && e.y < this.camY + VIEW_H + 220;
+  }
+  onScreen(e) {
+    return e.x + e.w > this.camX - 20 && e.x < this.camX + VIEW_W + 20 && e.y + e.h > this.camY - 60 && e.y < this.camY + VIEW_H + 60;
+  }
 
   bounce(p) {
     p.vy = Input.down('jump') ? -11.5 : -8.5;
@@ -385,7 +421,7 @@ class Game {
         if (t === T.LIQUID && p.y + p.h > r * TILE + 12 && !p.lavaWalk) { this.fallOut(); return; }
       }
     }
-    if (p.y > VIEW_H + 10) this.fallOut();
+    if (p.y > levelBottom(L) + 10) this.fallOut();
     // caminando sobre la lava con el escudo
     if (p.lavaWalk && p.onGround && tileAt(L, Math.floor((p.x + p.w / 2) / TILE), Math.floor((p.y + p.h + 2) / TILE)) === T.LIQUID && this.frame % 5 === 0) {
       this.particles.push(new Particle(p.x + Math.random() * p.w, p.y + p.h, (Math.random() - 0.5), -1.2, '#ffd166', 18, 3, 0));
@@ -432,10 +468,11 @@ class Game {
       p.reset(this.respawn.x, this.respawn.y);
       this.lastSafe = { ...this.respawn };
       this.projectiles = [];
-      if (this.arenaActive && this.boss) {
+      if (this.arenaActive && !this.bossDone) {
         // el jefe espera, pero conserva el daño que le hiciste
-        this.bossHpSaved = this.boss.hp;
+        this.bossHpSaved = this.boss ? this.boss.hp : null;
         this.boss = null;
+        this.rushWait = 0;
         this.enemies = this.enemies.filter(e => !e.isHelper);
         this.arenaActive = false;
         for (let r = 0; r < GROUND_ROW; r++) this.level.tiles[r * this.level.width + this.level.arenaStart] = T.EMPTY;
@@ -452,21 +489,57 @@ class Game {
     for (let r = 0; r < GROUND_ROW; r++) L.tiles[r * L.width + L.arenaStart] = T.BLOCK;
     const arena = { x0: (L.arenaStart + 1) * TILE, x1: (L.width - 2) * TILE };
     const s = this.bossSpawn;
-    this.boss = new Boss(s.kind, s.x * TILE, GROUND_ROW * TILE, arena);
+    const rush = s.kind === 'rush' ? this.world.bossRush : null;
+    this.boss = new Boss(rush ? rush[this.rushIndex] : s.kind, s.x * TILE, GROUND_ROW * TILE, arena);
+    // en el infierno los jefes tienen algo menos de vida (son 6 seguidos)
+    if (rush) this.boss.hp = this.boss.maxHp = Math.ceil(this.boss.maxHp * 0.6);
     if (this.bossHpSaved) this.boss.hp = this.bossHpSaved;
+    this.bossHpSaved = null;
     Sound.playMusic('boss');
     Sound.play('boss');
     this.shake = 12;
-    this.say(this.boss.name, '¡El monstruo final! Salta encima o atácale');
+    this.say(this.boss.name, rush ? `Monstruo ${this.rushIndex + 1} de ${rush.length}: ¡salta encima o atácale!` : '¡El monstruo final! Salta encima o atácale');
   }
 
   onBossDefeated(b) {
-    this.bossDone = true;
     this.addScore(1000, b.cx, b.y);
-    this.items.push(new Item('diamond', b.cx, b.y + b.h / 2, { fall: true, vy: -6 }));
-    this.say(`¡Has vencido a ${b.name}!`, 'Coge el diamante y lánzalo para abrir el portal');
+    const rush = this.bossSpawn && this.bossSpawn.kind === 'rush' ? this.world.bossRush : null;
+    if (rush && this.rushIndex < rush.length - 1) {
+      // ¡viene el siguiente! (de regalo, un corazón)
+      this.rushIndex++;
+      this.rushWait = 150;
+      this.items.push(new Item('heart', b.cx, b.y + b.h / 2, { fall: true, vy: -6 }));
+      this.say(`¡Has vencido a ${b.name}!`, `¡Cuidado! Ahora viene ${BOSS_TYPES[rush[this.rushIndex]].name}`);
+      Sound.play('win');
+      return;
+    }
+    this.bossDone = true;
+    if (rush) {
+      this.items.push(new Item('pocionVida', b.cx, b.y + b.h / 2, { fall: true, vy: -6 }));
+      this.say('¡Has vencido a los 6 monstruos!', 'Coge la poción de la vida para salvar a papá');
+    } else {
+      this.items.push(new Item('diamond', b.cx, b.y + b.h / 2, { fall: true, vy: -6 }));
+      this.say(`¡Has vencido a ${b.name}!`, 'Coge el diamante y lánzalo para abrir el portal');
+    }
     Sound.play('win');
     Sound.playMusic(this.world.song);
+  }
+
+  // Golpe de un monstruo final: el escudo de los monstruos lo para (3 veces)
+  bossHurtPlayer(dmg, element, srcX) {
+    const p = this.player;
+    const armor = this.inv.armor ? ARMORS[this.inv.armor] : null;
+    const blocked = ((element === 'bomb' || element === 'lava') && this.inv.escudo) || (element && armor && armor.immune === element);
+    if (!blocked && this.inv.escudoJefe > 0 && p.invuln === 0 && !p.dead && this.state === 'playing') {
+      this.inv.escudoJefe--;
+      p.invuln = INVULN_FRAMES;
+      p.vx = (p.x + p.w / 2 < srcX ? -1 : 1) * 4; p.vy = -5; p.bounced = true;
+      Sound.play('clank');
+      this.sparks(p.x + p.w / 2, p.y + 20, '#c9b6ff', 16);
+      this.floatText(p.x + p.w / 2, p.y - 12, this.inv.escudoJefe ? '¡Escudo! Quedan ' + this.inv.escudoJefe : '¡El escudo se ha roto!', '#c9b6ff');
+      return true;
+    }
+    return p.hurt(this, dmg, element, srcX);
   }
 
   clearHelpers() {
@@ -507,6 +580,21 @@ class Game {
       Sound.play('power');
       this.sparks(cx, cy, '#3ddc84', 20);
       this.say('¡Poción antimosquitos!', 'Te salva de una picadura de mosquito (solo una vez)');
+      return;
+    }
+    if (it.kind === 'escudoJefe') {
+      this.inv.escudoJefe = BOSS_SHIELD_HITS;
+      Sound.play('power');
+      this.sparks(cx, cy, '#c9b6ff', 20);
+      this.say('¡Escudo de los monstruos!', `Aguanta ${BOSS_SHIELD_HITS} golpes de los monstruos finales`);
+      return;
+    }
+    if (it.kind === 'pocionVida') {
+      this.inv.pocionVida = true;
+      Sound.play('power');
+      this.sparks(cx, cy, '#ff6b8b', 26);
+      if (!this.portal) this.openPortal((this.level.width - 6) * TILE, GROUND_ROW * TILE);
+      this.say('¡La poción de la vida!', 'Entra en el portal para volver con papá');
       return;
     }
     if (it.kind === 'escudo') {
@@ -592,7 +680,7 @@ class Game {
     Sound.play('victory');
     this.score += this.coins * 5;
     const next = this.worldIndex + 1;
-    this.save = next < WORLDS.length ? { world: next, inv: cloneInv(this.inv), score: this.score } : null;
+    this.save = next < WORLDS.length ? { world: next, part: 0, inv: cloneInv(this.inv), score: this.score } : null;
     writeSave(this.save);
   }
 
@@ -617,7 +705,10 @@ class Game {
     Sound.play('thud');
     this.shake = Math.max(this.shake, 8);
     const p = this.player;
-    if (Math.hypot(p.x + p.w / 2 - x, p.y + p.h / 2 - y) < 62) p.hurt(this, 1, 'bomb', x);
+    if (Math.hypot(p.x + p.w / 2 - x, p.y + p.h / 2 - y) < 62) {
+      if (this.boss) this.bossHurtPlayer(1, 'bomb', x);
+      else p.hurt(this, 1, 'bomb', x);
+    }
   }
 
   dropItem(kind, cx, cy) {
@@ -649,8 +740,17 @@ class Game {
     if (this.arenaActive) t = L.arenaStart * TILE;
     return clamp(t, 0, L.width * TILE - VIEW_W);
   }
-  updateCamera() { this.camX += (this.cameraTarget() - this.camX) * (this.arenaActive ? 0.06 : 0.15); }
-  snapCamera() { this.camX = this.cameraTarget(); }
+  // en los niveles altos (descenso) la cámara también sigue al ninja en vertical
+  cameraTargetY() {
+    const L = this.level, p = this.player;
+    const maxY = levelBottom(L) - VIEW_H;
+    return maxY > 0 ? clamp(p.y + p.h / 2 - VIEW_H * 0.45, 0, maxY) : 0;
+  }
+  updateCamera() {
+    this.camX += (this.cameraTarget() - this.camX) * (this.arenaActive ? 0.06 : 0.15);
+    this.camY += (this.cameraTargetY() - this.camY) * 0.2;
+  }
+  snapCamera() { this.camX = this.cameraTarget(); this.camY = this.cameraTargetY(); }
 
   say(title, sub) { this.msg = { title, sub, t: 230 }; }
   addScore(n, x, y) { this.score += n; if (x != null) this.floatText(x, y, '+' + n, '#ffe14d'); }
@@ -707,20 +807,25 @@ class Game {
     const L = this.level;
     ctx.save();
     ctx.translate(sx, sy);
-    Art.background(ctx, L.theme, this.camX, f);
-    ctx.translate(-Math.round(this.camX), 0);
+    Art.background(ctx, L.theme, this.camX, f, this.camY);
+    ctx.translate(-Math.round(this.camX), -Math.round(this.camY));
 
-    Art.tiles(ctx, L, this.camX, f);
+    for (const w of this.winds) Art.wind(ctx, w, f);
+    Art.tiles(ctx, L, this.camX, f, this.camY);
+    if (L.exit) Art.hellGate(ctx, L.exit, f);
     for (const c of this.checkpoints) Art.checkpoint(ctx, c, f);
     for (const j of this.jets) Art.jet(ctx, j, f);
-    for (const pl of this.platforms) if (pl.solid || pl.state !== 'gone') Art.platform(ctx, pl, L.theme, f);
+    for (const s of this.springs) Art.spring(ctx, s, f);
+    for (const pl of this.platforms) if (pl.solid || pl.state !== 'gone' || pl.style === 'blink') Art.platform(ctx, pl, L.theme, f);
     for (const c of this.crushers) Art.crusher(ctx, c);
+    for (const d of this.droppers) Art.dropper(ctx, d, f);
     for (const it of this.items) Art.item(ctx, it);
     if (this.portal) Art.portal(ctx, this.portal);
     for (const e of this.enemies) if (this.onScreen(e)) Art.enemy(ctx, e);
     if (this.boss) Art.boss(ctx, this.boss);
     for (const d of this.friends) Art.friend(ctx, d, f);
     if (!this.player.hidden) Art.player(ctx, this.player);
+    for (const fb of this.firebars) Art.firebar(ctx, fb, f);
     for (const pr of this.projectiles) Art.projectile(ctx, pr);
     for (const p of this.particles) Art.particle(ctx, p);
     ctx.restore();
@@ -732,7 +837,7 @@ class Game {
   drawHUD() {
     const ctx = this.ctx, p = this.player;
     // corazones y armadura
-    Art.box(ctx, 8, 8, 290, 66, 14, 'rgba(20,12,40,0.55)');
+    Art.box(ctx, 8, 8, this.inv.escudoJefe ? 330 : 290, 66, 14, 'rgba(20,12,40,0.55)');
     for (let i = 0; i < START_HEARTS; i++) Art.heart(ctx, 28 + i * 28, 28, 10, i < p.hearts ? '#ff4d6d' : 'rgba(255,255,255,0.22)');
     const armor = p.inv.armor ? ARMORS[p.inv.armor] : null;
     if (armor) {
@@ -744,6 +849,16 @@ class Game {
     Art.ellipse(ctx, 185, 55, 8, 9, '#e0a800'); Art.ellipse(ctx, 185, 55, 5.5, 6.5, '#ffd43b');
     Art.text(ctx, 'x' + this.coins, 202, 56, 18, '#ffe14d', 'left');
     if (this.inv.pocion) Art.potion(ctx, 272, 41, 12 + Math.sin(this.frame * 0.12));
+    if (this.inv.escudoJefe) {
+      Art.bossShield(ctx, 312, 36, 12);
+      Art.text(ctx, 'x' + this.inv.escudoJefe, 312, 62, 13, '#c9b6ff');
+    }
+    // energía de vuelo (espada láser)
+    if (this.inv.weapons.includes('espadaLaser')) {
+      Art.box(ctx, 8, 80, 150, 20, 8, 'rgba(20,12,40,0.55)');
+      Art.text(ctx, 'Vuelo', 16, 91, 12, '#7df9ff', 'left');
+      Art.box(ctx, 58, 85, 92 * (p.flyE / FLY.energy), 10, 5, p.flying ? '#ff4dd2' : '#7df9ff');
+    }
 
     // mundo y puntos
     Art.text(ctx, this.world.short, VIEW_W / 2 - 40, 24, 18, '#ffffff');
@@ -807,7 +922,7 @@ class Game {
       case 'intro': {
         this.dim(0.7);
         Art.text(ctx, this.world.name, cx, 150, 40, '#ffe14d');
-        Art.text(ctx, 'Monstruo final: ' + BOSS_TYPES[this.world.boss].name, cx, 210, 22, '#ff8fa3');
+        Art.text(ctx, this.world.bossRush ? 'Al final: ¡los 6 monstruos finales otra vez!' : 'Monstruo final: ' + BOSS_TYPES[this.world.boss].name, cx, 210, 22, '#ff8fa3');
         Art.text(ctx, this.world.tip, cx, 260, 17, '#ffffff');
         Art.ninjaHead(ctx, cx - 30, 330, 16);
         Art.text(ctx, 'x ' + this.lives, cx + 10, 331, 24, '#ffffff', 'left');
@@ -839,7 +954,7 @@ class Game {
       '← →  moverse',
       '↑ / Espacio  saltar  (en el aire: ¡doble salto!)',
       '↓ + salto  bajar de una plataforma',
-      'Z  atacar          Q / E  o  1-7  cambiar de arma',
+      'Z  atacar          Q / E  o  1-8  cambiar de arma',
       'C  cambiar de armadura          X  lanzar el diamante',
       'P  pausa          M  sonido',
     ];
@@ -890,35 +1005,30 @@ class Game {
   }
 
   // ----------------------------------------------------------
-  //  Final: el ninja rescata a su familia de la mazmorra
+  //  Escenas finales (en la mazmorra), el jugador maneja al ninja:
+  //  'rescue': abre la jaula... pero los mosquitos pican a papá
+  //  'cure':   vuelve del infierno y le da la poción de la vida
   // ----------------------------------------------------------
-  startEnding() {
+  startEnding(mode = 'rescue') {
     this.state = 'ending';
     this.timer = 0;
     this.particles = [];
-    this.camX = 0;
+    this.camX = 0; this.camY = 0;
     this.shake = 0;
-    // el jugador maneja al ninja y tiene que romper el candado de la jaula
-    this.end = { x: 80, h: 0, vy: 0, facing: 1, jumps: 2, flip: 0, moving: false,
-                 atk: 0, cd: 0, shots: [], hits: 0, wobble: 0, open: -1 };
+    this.end = { mode, x: 80, h: 0, vy: 0, facing: 1, jumps: 2, flip: 0, moving: false,
+                 atk: 0, cd: 0, shots: [], hits: 0, wobble: 0, open: -1, cure: -1, potion: null, mosq: [] };
     Sound.stopMusic();
+    if (mode === 'cure') Sound.playMusic('sad');
   }
 
-  updateEnding() {
-    const E = ENDING, n = this.end;
-    this.updateParticles();
-    if (n.open >= 0) n.open++;
-    const o = n.open;
-
-    // --- control del ninja (en píxeles de pantalla, escala 1,6) ---
-    const dir = (Input.down('right') ? 1 : 0) - (Input.down('left') ? 1 : 0);
+  // Control del ninja en la escena final (en píxeles de pantalla, escala 1,6).
+  // Devuelve true si el jugador ha pulsado atacar este frame.
+  endingControl(n, maxX, locked) {
+    const dir = locked ? 0 : (Input.down('right') ? 1 : 0) - (Input.down('left') ? 1 : 0);
     n.moving = dir !== 0;
     if (dir) n.facing = dir;
-    n.x += dir * 3.5;
-    // mientras salen los papás, el ninja se aparta un poco
-    if (o > 80 && o < 200 && n.x > 440) { n.x -= 2; n.moving = true; n.facing = -1; }
-    n.x = clamp(n.x, 30, o >= 0 ? VIEW_W - 30 : E.cageX - 85 - 22);
-    if (Input.pressed('jump') && n.jumps > 0) {
+    n.x = clamp(n.x + dir * 3.5, 30, maxX);
+    if (!locked && Input.pressed('jump') && n.jumps > 0) {
       n.vy = n.h === 0 ? -11 : -9.5;
       if (n.h > 0) n.flip = 24;
       n.jumps--;
@@ -929,36 +1039,87 @@ class Game {
     if (n.flip > 0) n.flip--;
     if (n.atk > 0) n.atk--;
     if (n.cd > 0) n.cd--;
+    for (const s of n.shots) {
+      s.x += s.vx; s.t++;
+      if (s.x + s.w / 2 < -40 || s.x + s.w / 2 > VIEW_W + 40) s.dead = true;
+    }
+    n.shots = n.shots.filter(s => !s.dead);
+    return !locked && Input.pressed('attack') && n.cd === 0;
+  }
 
-    // --- atacar: golpe de cerca o disparo ---
+  // Ataque en la escena final: golpe de cerca o disparo
+  endingAttack(n) {
     const W = WEAPONS[this.inv.weapon] || WEAPONS.baston;
-    if (Input.pressed('attack') && n.cd === 0) {
-      n.cd = W.cooldown; n.atk = W.duration || 10;
-      const kind = W.type === 'proj' ? W.proj : W.shot ? W.shot.kind : null;
-      if (kind) n.shots.push(new Projectile(kind, n.x + n.facing * 30, E.floor - n.h - 46, n.facing * 8, 0, 'player', 1, { element: W.element }));
-      Sound.play(W.type === 'proj' ? 'throw' : 'swing');
+    n.cd = W.cooldown; n.atk = W.duration || 10;
+    const kind = W.type === 'proj' ? W.proj : W.shot ? W.shot.kind : null;
+    if (kind) n.shots.push(new Projectile(kind, n.x + n.facing * 30, ENDING.floor - n.h - 46, n.facing * 8, 0, 'player', 1, { element: W.element }));
+    Sound.play(W.type === 'proj' ? 'throw' : 'swing');
+    return W;
+  }
+
+  updateEnding() {
+    this.updateParticles();
+    if (this.end.mode === 'cure') this.updateCure();
+    else this.updateRescue();
+  }
+
+  updateRescue() {
+    const E = ENDING, n = this.end;
+    if (n.open >= 0) n.open++;
+    const o = n.open;
+
+    // a partir de que llegan los mosquitos, la escena sigue sola
+    const locked = o >= 340;
+    let maxX = o >= 0 ? VIEW_W - 30 : E.cageX - 85 - 22;
+    // el ninja se aparta poco a poco para dejar sitio a los papás
+    const room = o > 440 ? 340 : o > 80 ? 440 : maxX;
+    maxX = n.x > room ? Math.max(room, n.x - 2.5) : Math.min(maxX, room);
+    if (locked) { n.facing = 1; n.atk = 0; }
+    if (this.endingControl(n, maxX, locked)) {
+      const W = this.endingAttack(n);
       const reach = W.type === 'melee' ? (W.range || 52) * 1.6 + 10 : 0;
       if (o < 0 && reach && n.facing === 1 && E.lockX - n.x < reach && n.h < 120) this.hitLock();
     }
     for (const s of n.shots) {
-      s.x += s.vx; s.t++;
-      const cx = s.x + s.w / 2;
-      if (o < 0 && s.vx > 0 && cx > E.lockX - 8 && Math.abs(s.y + s.h / 2 - E.lockY) < 70) { s.dead = true; this.hitLock(); }
-      if (cx < -40 || cx > VIEW_W + 40) s.dead = true;
+      if (o < 0 && s.vx > 0 && s.x + s.w / 2 > E.lockX - 8 && Math.abs(s.y + s.h / 2 - E.lockY) < 70) { s.dead = true; this.hitLock(); }
     }
-    n.shots = n.shots.filter(s => !s.dead);
     if (n.wobble > 0) n.wobble--;
 
     // --- después de abrir la jaula ---
     if (o === 15) Sound.play('portal');
     if (o === 190) { Sound.play('victory'); Sound.playMusic('ending'); }
-    if (o > 190 && o % 30 === 0) {
+    if (o > 190 && o < 360 && o % 30 === 0) {
       for (const x of [E.dadTo, E.momTo]) this.particles.push(new Particle(x + (Math.random() - 0.5) * 30, E.floor - 150, (Math.random() - 0.5), -1, '#ff6b8b', 60, 22, -0.01, '♥'));
     }
-    if (o > 210 && o % 24 === 0) this.firework(80 + Math.random() * (VIEW_W - 160), 50 + Math.random() * 120);
-    if (o > 330 && Input.pressed('start')) {
-      this.save = null; this.state = 'title'; this.level = null; this.particles = []; this.end = null;
-      Sound.playMusic('title');
+    if (o > 210 && o < 340 && o % 24 === 0) this.firework(80 + Math.random() * (VIEW_W - 160), 50 + Math.random() * 120);
+
+    // --- ¡llegan los mosquitos y pican a papá! ---
+    if (o === 360) {
+      Sound.stopMusic();
+      Sound.play('buzz');
+      n.mosq = [0, 1, 2].map(i => ({ x: VIEW_W + 30 + i * 50, y: 90 + i * 60, t: i * 20 }));
+    }
+    const bite = { x: E.dadTo - 4, y: E.floor - 108 };
+    for (const m of n.mosq) {
+      m.t++;
+      if (o < 450) {
+        // vuelan zumbando hacia papá
+        const k = clamp((o - 360) / 90, 0, 1);
+        m.x += (bite.x + Math.sin(m.t * 0.2) * 22 - m.x) * (0.03 + k * 0.1);
+        m.y += (bite.y + Math.cos(m.t * 0.17) * 16 - m.y) * (0.03 + k * 0.1);
+      } else { m.x += 3.5; m.y -= 2.2; } // y se van
+      if (o % 40 === 0 && o < 450) Sound.play('buzz');
+    }
+    if (o === 450) {
+      Sound.play('hurt');
+      this.sparks(bite.x, bite.y, '#ff5a5a', 20);
+      this.floatText(bite.x, bite.y - 30, '¡Picadura!', '#ff5a5a');
+    }
+    if (o === 480) { Sound.play('sad'); Sound.playMusic('sad'); }
+    if (o > 860 && Input.pressed('start')) {
+      // ¡al infierno a por la poción!
+      this.end = null; this.particles = [];
+      this.loadWorld(WORLDS.length - 1);
     }
   }
 
@@ -979,20 +1140,80 @@ class Game {
     }
   }
 
+  updateCure() {
+    const E = ENDING, n = this.end;
+    if (n.cure >= 0) n.cure++;
+    const c = n.cure;
+    // papá está tumbado: el ninja se acerca y le da la poción con Z
+    const near = n.x > E.dadLie - 120;
+    if (this.endingControl(n, c >= 0 && c > 140 ? VIEW_W - 30 : E.dadLie - 40, false)) {
+      if (c < 0 && near && n.h < 40) {
+        n.cure = 0; n.atk = 12; n.cd = 20; n.facing = 1;
+        n.potion = { x: n.x + 20, y: E.floor - 70 };
+        Sound.play('throw');
+      } else this.endingAttack(n);
+    }
+    // la poción vuela hasta papá
+    if (n.potion && c >= 0 && c <= 40) {
+      const k = c / 40;
+      n.potion.x = n.x + 20 + (E.dadLie + 30 - n.x - 20) * k;
+      n.potion.y = E.floor - 70 - Math.sin(k * Math.PI) * 90 + k * 40;
+    }
+    if (c === 40) {
+      n.potion = null;
+      Sound.play('power');
+      for (let i = 0; i < 30; i++) {
+        const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3;
+        this.particles.push(new Particle(E.dadLie + 40, E.floor - 20, Math.cos(a) * sp, Math.sin(a) * sp - 1, i % 2 ? '#ff6b8b' : '#7dff9a', 50, 5, -0.02));
+      }
+    }
+    if (c > 40 && c < 130 && c % 4 === 0) {
+      this.particles.push(new Particle(E.dadLie + Math.random() * 90, E.floor - Math.random() * 30, 0, -1.5, Math.random() < 0.5 ? '#7dff9a' : '#ffffff', 40, 4, -0.01));
+    }
+    if (c === 130) { Sound.play('victory'); Sound.playMusic('ending'); }
+    if (c > 140 && c % 30 === 0) {
+      for (const x of [E.dadTo, E.momTo]) this.particles.push(new Particle(x + (Math.random() - 0.5) * 30, E.floor - 150, (Math.random() - 0.5), -1, '#ff6b8b', 60, 22, -0.01, '♥'));
+    }
+    if (c > 160 && c % 24 === 0) this.firework(80 + Math.random() * (VIEW_W - 160), 50 + Math.random() * 120);
+    if (c > 320 && Input.pressed('start')) {
+      this.save = null; writeSave(null);
+      this.state = 'title'; this.level = null; this.particles = []; this.end = null;
+      Sound.playMusic('title');
+    }
+  }
+
   drawEnding() {
+    if (this.end.mode === 'cure') this.drawCure();
+    else this.drawRescue();
+  }
+
+  // El ninja de la escena final (lo maneja el jugador)
+  drawEndingNinja(n) {
+    const ctx = this.ctx, f = this.frame;
+    const fake = {
+      x: 0, y: 0, w: 26, h: 46, facing: n.facing, dead: false, invuln: 0, slow: 0, flip: n.flip,
+      inv: this.inv, vx: n.moving ? 3 * n.facing : 0, onGround: n.h === 0, vy: n.vy, anim: f,
+      attackTimer: n.atk, attackCooldown: n.cd,
+    };
+    ctx.save(); ctx.translate(n.x, ENDING.floor - n.h); ctx.scale(1.6, 1.6); ctx.translate(-13, -46); Art.player(ctx, fake); ctx.restore();
+    for (const s of n.shots) Art.projectile(ctx, s);
+  }
+
+  drawRescue() {
     const ctx = this.ctx, cx = VIEW_W / 2, f = this.frame, E = ENDING, n = this.end, o = n.open;
     Art.dungeon(ctx, f);
 
     const ease = k => 0.5 - 0.5 * Math.cos(clamp(k, 0, 1) * Math.PI);
     const bars = o < 0 ? 0 : ease((o - 15) / 70);
     const out = o < 0 ? 0 : ease((o - 90) / 100);
-    const happy = o > 110;
-    const hop = k => o > 190 ? Math.abs(Math.sin((f + k) * 0.12)) * 18 : 0;
+    const happy = o > 110 && o < 400;
+    const hop = k => o > 190 && o < 360 ? Math.abs(Math.sin((f + k) * 0.12)) * 18 : 0;
     const dadX = E.dadFrom + (E.dadTo - E.dadFrom) * out;
     const momX = E.momFrom + (E.momTo - E.momFrom) * out;
+    const fall = ease((o - 450) / 40); // papá se cae tras la picadura
 
     // familia (dentro de la jaula al principio)
-    Art.parent(ctx, dadX, E.floor - hop(0), 'dad', f, happy, out > 0 && out < 1);
+    Art.parent(ctx, dadX, E.floor - hop(0), 'dad', f, happy, out > 0 && out < 1, fall);
     Art.parent(ctx, momX, E.floor - hop(20), 'mom', f, happy, out > 0 && out < 1);
     ctx.save();
     if (n.wobble > 0) ctx.translate(Math.sin(n.wobble * 1.7) * 3, 0);
@@ -1006,16 +1227,14 @@ class Game {
       ctx.stroke();
     }
 
-    // el ninja (lo maneja el jugador)
-    const W = WEAPONS[this.inv.weapon];
-    const fake = {
-      x: 0, y: 0, w: 26, h: 46, facing: n.facing, dead: false, invuln: 0, slow: 0, flip: n.flip,
-      inv: this.inv, vx: n.moving ? 3 * n.facing : 0, onGround: n.h === 0, vy: n.vy, anim: f,
-      attackTimer: n.atk, attackCooldown: n.cd,
-    };
-    ctx.save(); ctx.translate(n.x, E.floor - n.h); ctx.scale(1.6, 1.6); ctx.translate(-13, -46); Art.player(ctx, fake); ctx.restore();
-    for (const s of n.shots) Art.projectile(ctx, s);
+    this.drawEndingNinja(n);
+    for (const m of n.mosq) {
+      ctx.save(); ctx.translate(m.x, m.y + 8); ctx.scale(m.x > E.dadTo && o < 450 ? -1.6 : 1.6, 1.6);
+      Art.mosquito(ctx, { t: m.t, w: 18, h: 16 });
+      ctx.restore();
+    }
 
+    const W = WEAPONS[this.inv.weapon];
     if (o < 0) {
       Art.speech(ctx, E.momFrom + 10, E.floor - 140, n.hits ? '¡Sigue así!' : '¡Socorro!');
       // flecha que señala el candado
@@ -1024,18 +1243,63 @@ class Game {
       const how = W && W.type === 'proj' ? 'Dispara al candado con Z' : 'Acércate al candado y golpéalo con Z';
       Art.text(ctx, how + '  (' + n.hits + ' / ' + LOCK_HITS + ')', cx, 102, 20, '#ffffff');
     } else if (o > 100 && o < 190) Art.speech(ctx, E.dadTo + 30, E.floor - 150, '¡Gracias, ninja!');
+    else if (o > 365 && o < 450) Art.speech(ctx, E.momTo + 10, E.floor - 150, '¡Cuidado! ¡Mosquitos!');
+    else if (o > 500 && o < 640) Art.speech(ctx, E.momTo + 10, E.floor - 150, '¡Papá se muere!');
+    else if (o >= 640 && o < 760) Art.speech(ctx, n.x + 10, E.floor - 120, '¡Mamá, no llores!');
+    else if (o >= 760) {
+      Art.speech(ctx, n.x + 90, E.floor - 120, 'Viajaré al infierno a por la poción que salvará a papá');
+      if (o > 820) Art.speech(ctx, E.momTo + 20, E.floor - 175, '¡Ten mucho cuidado, hijo!');
+    }
 
     for (const p of this.particles) Art.particle(ctx, p);
 
-    if (o > 190) {
+    if (o > 190 && o < 360) {
       Art.text(ctx, '¡HAS RESCATADO A TU FAMILIA!', cx, 70, 40, '#ffe14d', 'center', '#e63946');
       Art.text(ctx, 'Has vencido a los 6 monstruos. ¡Eres el mejor ninja!', cx, 118, 20, '#ffffff');
       Art.text(ctx, 'Puntos: ' + this.score, cx, 152, 22, '#ffe14d');
+    } else if (o > 470) {
+      Art.text(ctx, '¡Oh, no! ¡Los mosquitos han picado a papá!', cx, 70, 32, '#ff8fa3', 'center', '#1b1030');
+      if (o > 760) Art.text(ctx, 'Solo la poción de la vida del infierno puede salvarlo', cx, 112, 20, '#ffffff');
     }
-    if (o > 330 && this.blink()) Art.text(ctx, 'FIN  ·  Pulsa ENTER para volver al inicio', cx, VIEW_H - 22, 18, '#ffffff');
+    if (o > 860 && this.blink()) Art.text(ctx, 'Pulsa ENTER para viajar al infierno', cx, VIEW_H - 22, 20, '#ffe14d');
+  }
+
+  drawCure() {
+    const ctx = this.ctx, cx = VIEW_W / 2, f = this.frame, E = ENDING, n = this.end, c = n.cure;
+    Art.dungeon(ctx, f);
+    Art.cage(ctx, E.cageX, E.floor, 1, false, f);
+    const ease = k => 0.5 - 0.5 * Math.cos(clamp(k, 0, 1) * Math.PI);
+    const fall = c < 0 ? 1 : 1 - ease((c - 60) / 60); // papá se levanta
+    const happy = c > 120;
+    const hop = k => c > 140 ? Math.abs(Math.sin((f + k) * 0.12)) * 18 : 0;
+    // papá brilla mientras la poción hace efecto
+    if (c > 40 && c < 160) Art.circle(ctx, E.dadTo - 40 * fall, E.floor - 50, 70 + Math.sin(f * 0.3) * 6, `rgba(125,255,154,${0.25 * (1 - Math.max(0, c - 120) / 40)})`);
+    Art.parent(ctx, E.dadTo, E.floor - hop(0), 'dad', f, happy, false, fall);
+    Art.parent(ctx, E.momTo, E.floor - hop(20), 'mom', f, happy, false);
+
+    this.drawEndingNinja(n);
+    // el ninja lleva la poción en alto hasta dársela
+    if (c < 0) Art.lifePotion(ctx, n.x + n.facing * 6, E.floor - n.h - 100 + Math.sin(f * 0.1) * 3, 13);
+    else if (n.potion) Art.lifePotion(ctx, n.potion.x, n.potion.y, 13);
+
+    if (c < 0) {
+      Art.speech(ctx, E.momTo + 10, E.floor - 150, '¡Rápido, la poción!');
+      Art.text(ctx, '¡Salva a papá!', cx, 60, 34, '#ffe14d', 'center', '#e63946');
+      Art.text(ctx, 'Acércate a papá y pulsa Z para darle la poción de la vida', cx, 102, 20, '#ffffff');
+      if (n.x > E.dadLie - 120) Art.text(ctx, '▼', E.dadLie + 30, E.floor - 70 - Math.abs(Math.sin(f * 0.1)) * 10, 22, '#ffe14d');
+    } else if (c > 130 && c < 280) Art.speech(ctx, E.dadTo + 30, E.floor - 150, '¡Gracias, hijo! ¡Te quiero!');
+
+    for (const p of this.particles) Art.particle(ctx, p);
+
+    if (c > 150) {
+      Art.text(ctx, '¡HAS SALVADO A PAPÁ!', cx, 70, 42, '#ffe14d', 'center', '#e63946');
+      Art.text(ctx, 'Has vencido a todos los monstruos, incluso en el infierno. ¡Eres el mejor ninja!', cx, 118, 19, '#ffffff');
+      Art.text(ctx, 'Puntos: ' + this.score, cx, 152, 22, '#ffe14d');
+    }
+    if (c > 320 && this.blink()) Art.text(ctx, 'FIN  ·  Pulsa ENTER para volver al inicio', cx, VIEW_H - 22, 18, '#ffffff');
   }
 }
 
-// Posiciones de la escena final (en píxeles de pantalla)
+// Posiciones de las escenas finales (en píxeles de pantalla)
 const LOCK_HITS = 3;
-const ENDING = { floor: 470, ninjaTo: 480, cageX: 640, lockX: 558, lockY: 400, dadFrom: 612, dadTo: 505, momFrom: 676, momTo: 572 };
+const ENDING = { floor: 470, ninjaTo: 480, cageX: 640, lockX: 558, lockY: 400, dadFrom: 612, dadTo: 505, momFrom: 676, momTo: 572, dadLie: 400 };

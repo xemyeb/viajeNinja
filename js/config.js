@@ -48,8 +48,16 @@ const WEAPONS = {
                  shot: { kind: 'flame', dmg: 2, speed: 6, life: 50 } },
   espadaHielo: { name: 'Espada de hielo', type: 'melee', dmg: 2, range: 56, cooldown: 18, duration: 11, element: 'ice', freeze: 150,
                  shot: { kind: 'iceRay', dmg: 1, speed: 10, life: 45 } },
+  // Espada láser (infierno): golpe largo, dispara un rayo láser y ¡permite volar!
+  espadaLaser: { name: 'Espada láser', type: 'melee', dmg: 3, range: 70, cooldown: 14, duration: 10, fly: true,
+                 shot: { kind: 'laser', dmg: 2, speed: 13, life: 40 } },
 };
-const WEAPON_ORDER = ['baston', 'espada', 'lunchacos', 'estrellas', 'arco', 'espadaFuego', 'espadaHielo'];
+const WEAPON_ORDER = ['baston', 'espada', 'lunchacos', 'estrellas', 'arco', 'espadaFuego', 'espadaHielo', 'espadaLaser'];
+
+// Vuelo con la espada láser: mantener el salto en el aire (energía en frames)
+const FLY = { energy: 200, lift: 1.05, maxUp: -4.6, recharge: 4 };
+// Golpes de jefe que aguanta el escudo de los monstruos finales
+const BOSS_SHIELD_HITS = 3;
 
 // ------------------------------------------------------------
 //  Armaduras + cascos (se consiguen juntos)
@@ -67,5 +75,7 @@ const ARMOR_ORDER = ['metal', 'roca', 'fuego', 'hielo', 'diamante', 'dorada'];
 
 // Temas cuyo líquido es lava (el escudo permite caminar sobre ella)
 const LAVA_THEMES = new Set(['castle', 'volcano']);
+// La lava del infierno no se puede pisar ni con el escudo (solo se ve igual)
+const LAVA_LOOK = new Set(['castle', 'volcano', 'hell']);
 
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
